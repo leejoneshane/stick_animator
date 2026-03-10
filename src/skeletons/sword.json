@@ -1,0 +1,113 @@
+{
+    "name": "巨劍 (Sword)",
+    "nodes": [
+        {
+            "id": "hiltCenter",
+            "name": "握把中心 (核心)",
+            "relX": 400,
+            "relY": 350,
+            "thickness": 12,
+            "zOrder": 10,
+            "handleType": "ROOT",
+            "parentId": null
+        },
+        {
+            "id": "handleBottom",
+            "name": "握把底部",
+            "relX": 0,
+            "relY": 20,
+            "thickness": 12,
+            "zOrder": 12,
+            "handleType": "STATIC",
+            "parentId": "hiltCenter",
+            "segment": {
+                "color": "#8b4513",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "pommel",
+            "name": "止滑器 (劍首)",
+            "relX": 0,
+            "relY": 10,
+            "thickness": 12,
+            "zOrder": 14,
+            "handleType": "STATIC",
+            "parentId": "handleBottom",
+            "segment": {
+                "color": "#ffd700",
+                "shape": "CIRCLE"
+            }
+        },
+        {
+            "id": "crossguardCenter",
+            "name": "劍鍔中心",
+            "relX": 0,
+            "relY": -20,
+            "thickness": 12,
+            "zOrder": 12,
+            "handleType": "STATIC",
+            "parentId": "hiltCenter",
+            "segment": {
+                "color": "#8b4513",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "crossguardLeft",
+            "name": "左劍鍔",
+            "relX": -30,
+            "relY": 0,
+            "thickness": 16,
+            "zOrder": 14,
+            "handleType": "STATIC",
+            "parentId": "crossguardCenter",
+            "segment": {
+                "color": "#ffd700",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "crossguardRight",
+            "name": "右劍鍔",
+            "relX": 30,
+            "relY": 0,
+            "thickness": 16,
+            "zOrder": 14,
+            "handleType": "STATIC",
+            "parentId": "crossguardCenter",
+            "segment": {
+                "color": "#ffd700",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "blade",
+            "name": "劍身",
+            "relX": 0,
+            "relY": -200,
+            "thickness": 12,
+            "zOrder": 14,
+            "handleType": "STATIC",
+            "parentId": "crossguardCenter",
+            "segment": {
+                "color": "#e0e0e0",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "bladeTip",
+            "name": "劍尖",
+            "relX": 0,
+            "relY": -20,
+            "thickness": 1,
+            "zOrder": 12,
+            "handleType": "STATIC",
+            "parentId": "blade",
+            "segment": {
+                "color": "#e0e0e0",
+                "shape": "TRAPEZOID"
+            }
+        }
+    ]
+}

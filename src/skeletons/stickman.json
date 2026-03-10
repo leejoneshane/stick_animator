@@ -1,0 +1,225 @@
+{
+    "name": "預設火柴人 Pro",
+    "nodes": [
+        {
+            "id": "pelvis",
+            "name": "盆骨(根節點)",
+            "relX": 400,
+            "relY": 350,
+            "thickness": 20,
+            "zOrder": 5,
+            "handleType": "ROOT",
+            "parentId": null
+        },
+        {
+            "id": "midTorso",
+            "name": "腹部",
+            "relX": 0,
+            "relY": -40,
+            "thickness": 20,
+            "zOrder": 7,
+            "handleType": "ROTATE",
+            "parentId": "pelvis",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "neck",
+            "name": "胸部",
+            "relX": 0,
+            "relY": -40,
+            "thickness": 20,
+            "zOrder": 9,
+            "handleType": "ROTATE",
+            "parentId": "midTorso",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "head",
+            "name": "頭部",
+            "relX": 0,
+            "relY": -40,
+            "thickness": 20,
+            "zOrder": 11,
+            "handleType": "ROTATE",
+            "parentId": "neck",
+            "segment": {
+                "color": "#fff",
+                "shape": "CIRCLE"
+            }
+        },
+        {
+            "id": "lElbow",
+            "name": "左手肘",
+            "relX": -35,
+            "relY": 35,
+            "thickness": 12,
+            "zOrder": 7,
+            "handleType": "ROTATE",
+            "parentId": "neck",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "lHand",
+            "name": "左手腕",
+            "relX": -25,
+            "relY": 25,
+            "thickness": 8,
+            "zOrder": 5,
+            "handleType": "ROTATE",
+            "parentId": "lElbow",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "lFinger",
+            "name": "左手指",
+            "relX": -10,
+            "relY": 10,
+            "thickness": 4,
+            "zOrder": 3,
+            "handleType": "ROTATE",
+            "parentId": "lHand",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "rElbow",
+            "name": "右手肘",
+            "relX": 35,
+            "relY": 35,
+            "thickness": 12,
+            "zOrder": 7,
+            "handleType": "ROTATE",
+            "parentId": "neck",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "rHand",
+            "name": "右手腕",
+            "relX": 25,
+            "relY": 25,
+            "thickness": 8,
+            "zOrder": 5,
+            "handleType": "ROTATE",
+            "parentId": "rElbow",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "rFinger",
+            "name": "右手指",
+            "relX": 10,
+            "relY": 10,
+            "thickness": 4,
+            "zOrder": 3,
+            "handleType": "ROTATE",
+            "parentId": "rHand",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "lKnee",
+            "name": "左膝",
+            "relX": -20,
+            "relY": 60,
+            "thickness": 14,
+            "zOrder": 7,
+            "handleType": "ROTATE",
+            "parentId": "pelvis",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "lAnkle",
+            "name": "左腳踝",
+            "relX": 0,
+            "relY": 60,
+            "thickness": 8,
+            "zOrder": 5,
+            "handleType": "ROTATE",
+            "parentId": "lKnee",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "lToe",
+            "name": "左腳趾",
+            "relX": -20,
+            "relY": 0,
+            "thickness": 5,
+            "zOrder": 7,
+            "handleType": "ROTATE",
+            "parentId": "lAnkle",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "rKnee",
+            "name": "右膝",
+            "relX": 20,
+            "relY": 60,
+            "thickness": 14,
+            "zOrder": 7,
+            "handleType": "ROTATE",
+            "parentId": "pelvis",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "rAnkle",
+            "name": "右腳踝",
+            "relX": 0,
+            "relY": 60,
+            "thickness": 8,
+            "zOrder": 5,
+            "handleType": "ROTATE",
+            "parentId": "rKnee",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        },
+        {
+            "id": "rToe",
+            "name": "右腳趾",
+            "relX": 20,
+            "relY": 0,
+            "thickness": 5,
+            "zOrder": 7,
+            "handleType": "ROTATE",
+            "parentId": "rAnkle",
+            "segment": {
+                "color": "#fff",
+                "shape": "TRAPEZOID"
+            }
+        }
+    ]
+}

@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  background-color: #030305;
+  color: #f1f1f1;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 50%, #0a0a0f 0%, #030305 100%);
+}
+
+/* Premium Glassmorphism */
+.glass-panel {
+  background: rgba(15, 15, 20, 0.7);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+}
+
+.glass-header {
+  background: rgba(10, 10, 15, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Glow Effects */
+.glow-blue {
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+}
+
+/* Custom Sprite Icons */
+.banana-icon {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  background-image: url('/assets/ui-pack.png');
+  background-size: 300% 300%;
+  /* 3x3 grid */
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.2));
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.2s ease;
+}
+
+.banana-icon:hover {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
+}
+
+/* Sprite Positions (3x3 grid) */
+.icon-play {
+  background-position: 0% 0%;
+}
+
+.icon-pause {
+  background-position: 50% 0%;
+}
+
+.icon-save {
+  background-position: 100% 0%;
+}
+
+.icon-add-figure {
+  background-position: 0% 50%;
+}
+
+.icon-new-frame {
+  background-position: 50% 50%;
+}
+
+.icon-export {
+  background-position: 100% 50%;
+}
+
+.icon-trash {
+  background-position: 0% 100%;
+}
+
+.icon-interpolate {
+  background-position: 100% 100%;
+}
+
+/* Large Icons */
+.banana-icon-lg {
+  width: 32px;
+  height: 32px;
+}
+
+/* XL Icons for specific buttons */
+.banana-icon-xl {
+  width: 48px;
+  height: 48px;
+}
+
+/* Custom scrollbar for timeline */
+.custom-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.mask-fade-edges {
+  mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+}
+
+.grid-cols-16 {
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+}

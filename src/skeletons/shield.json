@@ -1,0 +1,43 @@
+{
+  "name": "盾牌 (Shield)",
+  "nodes": [
+    {
+      "id": "shieldCenter",
+      "name": "握把 (核心)",
+      "relX": 400,
+      "relY": 350,
+      "thickness": 40,
+      "zOrder": 10,
+      "handleType": "ROOT",
+      "parentId": null
+    },
+    {
+      "id": "shieldTop",
+      "name": "盾牌上半部",
+      "relX": 0,
+      "relY": -30,
+      "thickness": 1,
+      "zOrder": 12,
+      "handleType": "STATIC",
+      "parentId": "shieldCenter",
+      "segment": {
+        "color": "#a0a0a0",
+        "shape": "TRAPEZOID"
+      }
+    },
+    {
+      "id": "shieldBottom",
+      "name": "盾牌下半部",
+      "relX": 0,
+      "relY": 30,
+      "thickness": 1,
+      "zOrder": 12,
+      "handleType": "STATIC",
+      "parentId": "shieldCenter",
+      "segment": {
+        "color": "#a0a0a0",
+        "shape": "TRAPEZOID"
+      }
+    }
+  ]
+}
