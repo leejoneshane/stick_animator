@@ -35,11 +35,11 @@ export const ColorPalette: React.FC<ColorPaletteProps> = ({ onColorSelect, selec
             style={{ gridTemplateColumns: 'repeat(16, 1fr)' }}
         >
             {colors.slice(0, 256).map((color, i) => (
-                <button
+                <div
                     key={i}
                     onClick={() => onColorSelect(color)}
-                    className={`w-3.5 h-3.5 hover:scale-125 hover:z-10 transition-transform ${selectedColor === color ? 'ring-1 ring-white z-10' : ''}`}
-                    style={{ backgroundColor: color }}
+                    className={`cursor-pointer hover:scale-125 hover:z-10 transition-transform ${selectedColor === color ? 'ring-1 ring-white z-10' : ''}`}
+                    style={{ backgroundColor: color, width: '100%', height: '16px' }}
                     title={color}
                 />
             ))}

@@ -38,69 +38,6 @@ body {
   box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
 }
 
-/* Custom Sprite Icons */
-.banana-icon {
-  display: inline-block;
-  width: 24px;
-  height: 24px;
-  background-image: url('/assets/ui-pack.png');
-  background-size: 300% 300%;
-  /* 3x3 grid */
-  background-repeat: no-repeat;
-  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.2));
-  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.2s ease;
-}
-
-.banana-icon:hover {
-  transform: scale(1.1);
-  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
-}
-
-/* Sprite Positions (3x3 grid) */
-.icon-play {
-  background-position: 0% 0%;
-}
-
-.icon-pause {
-  background-position: 50% 0%;
-}
-
-.icon-save {
-  background-position: 100% 0%;
-}
-
-.icon-add-figure {
-  background-position: 0% 50%;
-}
-
-.icon-new-frame {
-  background-position: 50% 50%;
-}
-
-.icon-export {
-  background-position: 100% 50%;
-}
-
-.icon-trash {
-  background-position: 0% 100%;
-}
-
-.icon-interpolate {
-  background-position: 100% 100%;
-}
-
-/* Large Icons */
-.banana-icon-lg {
-  width: 32px;
-  height: 32px;
-}
-
-/* XL Icons for specific buttons */
-.banana-icon-xl {
-  width: 48px;
-  height: 48px;
-}
-
 /* Custom scrollbar for timeline */
 .custom-scrollbar::-webkit-scrollbar {
   height: 6px;

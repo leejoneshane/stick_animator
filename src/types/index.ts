@@ -42,6 +42,8 @@ export interface FigureNode {
 
 export interface Figure {
   id: string;
+  name: string;
+  origine?: string;
   nodes: Record<string, FigureNode>;
   rootId: string;
 }

@@ -57,7 +57,7 @@ export const createFigureFromTemplate = (template: SkeletonTemplate): Figure => 
         };
     });
 
-    return { id: figureId, nodes, rootId };
+    return { id: figureId, name: figureId, origine: template.name, nodes, rootId };
 };
 
 // Dynamic import of all JSON files in the skeletons directory

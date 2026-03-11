@@ -46,7 +46,7 @@
             "relY": -40,
             "thickness": 20,
             "zOrder": 11,
-            "handleType": "ROTATE",
+            "handleType": "STATIC",
             "parentId": "neck",
             "segment": {
                 "color": "#fff",
@@ -88,11 +88,11 @@
             "relY": 10,
             "thickness": 4,
             "zOrder": 3,
-            "handleType": "ROTATE",
+            "handleType": "STATIC",
             "parentId": "lHand",
             "segment": {
                 "color": "#fff",
-                "shape": "TRAPEZOID"
+                "shape": "CIRCLE"
             }
         },
         {
@@ -130,11 +130,11 @@
             "relY": 10,
             "thickness": 4,
             "zOrder": 3,
-            "handleType": "ROTATE",
+            "handleType": "STATIC",
             "parentId": "rHand",
             "segment": {
                 "color": "#fff",
-                "shape": "TRAPEZOID"
+                "shape": "CIRCLE"
             }
         },
         {
@@ -172,7 +172,7 @@
             "relY": 0,
             "thickness": 5,
             "zOrder": 7,
-            "handleType": "ROTATE",
+            "handleType": "STATIC",
             "parentId": "lAnkle",
             "segment": {
                 "color": "#fff",
@@ -214,7 +214,7 @@
             "relY": 0,
             "thickness": 5,
             "zOrder": 7,
-            "handleType": "ROTATE",
+            "handleType": "STATIC",
             "parentId": "rAnkle",
             "segment": {
                 "color": "#fff",

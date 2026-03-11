@@ -5,7 +5,7 @@ import { renderFigure } from '../engine/renderer';
 
 interface CanvasViewProps {
     figures: Record<string, Figure>;
-    onChange: (figures: Record<string, Figure>) => void;
+    onChange: (figures: Record<string, Figure>, skipHistory?: boolean) => void;
     showStaticHandles: boolean;
     width: number;
     height: number;
@@ -16,6 +16,8 @@ interface CanvasViewProps {
     selectedNodeId?: string | null;
     selectedFigureId: string;
     onionSkins?: Record<string, Figure>[];
+    onDragStart?: () => void;
+    isFigureRotationMode?: boolean;
 }
 
 export const CanvasView: React.FC<CanvasViewProps> = ({
@@ -30,10 +32,13 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     selectedFigureId,
     onionSkins = [],
     stageWidth,
-    stageHeight
+    stageHeight,
+    onDragStart,
+    isFigureRotationMode = false
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+    const dragStartedRef = useRef(false);
 
     // Calculate topological depth of figures based on attachments (links)
     const sortedFigures = React.useMemo(() => {
@@ -284,9 +289,13 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                 // Rotation Mode - Find true pivot by climbing STATIC joints
                 let pivotNodeId = node.parentId;
 
-                // Climb up if the intermediate parent is STATIC and not the root
-                while (pivotNodeId && newNodes[pivotNodeId].parentId && newNodes[pivotNodeId].handleType === 'STATIC') {
-                    pivotNodeId = newNodes[pivotNodeId].parentId!;
+                if (isFigureRotationMode) {
+                    pivotNodeId = activeFigure.rootId;
+                } else {
+                    // Climb up if the intermediate parent is STATIC and not the root
+                    while (pivotNodeId && newNodes[pivotNodeId].parentId && newNodes[pivotNodeId].handleType === 'STATIC') {
+                        pivotNodeId = newNodes[pivotNodeId].parentId!;
+                    }
                 }
 
                 // If it climbed all the way to root, it will pivot around the root.
@@ -299,37 +308,39 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                 const deltaAngle = newAngle - oldAngle;
 
                 // Recursively apply rotation to ALL nodes that descend from the true pivot.
-                // Because we only define relX/relY in our schema (relative to immediate parent), 
-                // rotating a parent by an angle means its own relX/relY must be transformed by that angle.
-                // Rotating a node's relX/relY effectively translates ALL of its children automatically 
-                // when drawn, so we only need to rotate the direct children of the pivot, and the mathematics 
-                // propagate naturally through the hierarchy up to the dragged node!
+                const descendants: string[] = [];
 
-                // Find all direct children of the pivot 
-                // Wait - rotating the subtree from the pivot means finding nodes in the chain from the pivot down to the dragged node.
-                // Let's find the immediate child of the `pivotNodeId` that leads down to this branch, and rotate its relX/relY.
+                if (isFigureRotationMode) {
+                    // Gather ALL nodes except the root
+                    Object.values(newNodes).forEach(n => {
+                        if (n.id !== activeFigure.rootId) {
+                            descendants.push(n.id);
+                        }
+                    });
+                } else {
+                    let branchRootId = draggingNodeId;
+                    while (newNodes[branchRootId].parentId !== pivotNodeId && newNodes[branchRootId].parentId !== null) {
+                        branchRootId = newNodes[branchRootId].parentId!;
+                    }
 
-                let branchRootId = draggingNodeId;
-                while (newNodes[branchRootId].parentId !== pivotNodeId && newNodes[branchRootId].parentId !== null) {
-                    branchRootId = newNodes[branchRootId].parentId!;
+                    if (newNodes[branchRootId].parentId === pivotNodeId) {
+                        descendants.push(branchRootId);
+                        let i = 0;
+                        while (i < descendants.length) {
+                            const currId = descendants[i];
+                            Object.values(newNodes).forEach(n => {
+                                if (n.parentId === currId) {
+                                    descendants.push(n.id);
+                                }
+                            });
+                            i++;
+                        }
+                    }
                 }
 
-                if (newNodes[branchRootId].parentId === pivotNodeId) {
+                if (descendants.length > 0) {
                     const s = Math.sin(deltaAngle);
                     const c = Math.cos(deltaAngle);
-
-                    // Gather branchRoot and all its descendants to rotate them rigidly
-                    const descendants = [branchRootId];
-                    let i = 0;
-                    while (i < descendants.length) {
-                        const currId = descendants[i];
-                        Object.values(newNodes).forEach(n => {
-                            if (n.parentId === currId) {
-                                descendants.push(n.id);
-                            }
-                        });
-                        i++;
-                    }
 
                     // Apply the rotation matrix to every descendant's relative vector
                     descendants.forEach(id => {
@@ -381,6 +392,11 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                 });
             };
 
+            if (!dragStartedRef.current) {
+                if (onDragStart) onDragStart();
+                dragStartedRef.current = true;
+            }
+
             // If we moved the root, we move all children (FK), so anything attached to ANY node of this figure moves
             if (!node.parentId) {
                 Object.values(newNodes).forEach(n => moveLinkedFigures(n.id, dx, dy));
@@ -394,7 +410,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             }
         }
 
-        onChange(newFigures);
+        onChange(newFigures, true);
     };
 
     const handleMouseUp = (e: React.MouseEvent) => {
@@ -440,13 +456,14 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                                     }
                                 }
                             }
-                        });
+                        }, true);
                     }
                 }
             }
         }
 
         setDraggingNodeId(null);
+        dragStartedRef.current = false;
     };
 
     return (
