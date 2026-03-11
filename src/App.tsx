@@ -58,8 +58,8 @@ function useHistory<T>(initialState: T, maxHistorySize = 50) {
     setInternalState((curr) => {
       if (history.length === 0) return curr;
       const prev = history[history.length - 1];
-      setHistory(history.slice(0, -1));
-      setRedos((r) => [...r, curr]);
+      setRedos((r) => [curr, ...r]);
+      setHistory((h) => h.slice(0, -1));
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(prev));
       return prev;
     });
@@ -69,15 +69,22 @@ function useHistory<T>(initialState: T, maxHistorySize = 50) {
   const redo = useCallback(() => {
     setInternalState((curr) => {
       if (redos.length === 0) return curr;
-      const next = redos[redos.length - 1];
-      setRedos(redos.slice(0, -1));
-      setHistory((h) => [...h, curr]);
+      const next = redos[0];
+      setHistory((h) => [...h, curr].slice(-maxHistorySize));
+      setRedos((r) => r.slice(1));
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
-  }, [redos]);
+  }, [redos, maxHistorySize]);
 
   // Delete all storage
+  const resetRaw = useCallback((newState: T) => {
+    setInternalState(newState);
+    setHistory([]);
+    setRedos([]);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newState));
+  }, []);
+
   const reset = useCallback(() => {
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     setHistory([]);
@@ -85,18 +92,26 @@ function useHistory<T>(initialState: T, maxHistorySize = 50) {
     setInternalState(initialState);
   }, [initialState]);
 
-  return { state, setState, undo, redo, reset, pushToHistory, canUndo: history.length > 0, canRedo: redos.length > 0 };
+  return { state, setState, pushToHistory, undo, redo, canUndo: history.length > 0, canRedo: redos.length > 0, resetRaw, reset };
 }
+
+const initialAnimationState: Animation = {
+  keyframes: [{ id: uuidv4(), figureStates: { 'stickman': createDefaultStickman() }, duration: 0.5 }],
+  fps: 12
+};
 
 const App: React.FC = () => {
   const {
     state: animation,
     setState: setAnimation,
-    undo, redo, reset, canUndo, canRedo, pushToHistory
-  } = useHistory<Animation>({
-    keyframes: [{ id: uuidv4(), figureStates: { 'stickman': createDefaultStickman() }, duration: 0.5 }],
-    fps: 12
-  });
+    pushToHistory: pushAnimationHistory,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    resetRaw,
+    reset
+  } = useHistory<Animation>(initialAnimationState);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showStaticHandles, setShowStaticHandles] = useState(true);
@@ -413,14 +428,13 @@ const App: React.FC = () => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
         if (parsed.animation && parsed.currentStageSize) {
-          setAnimation(parsed.animation, true); // skipHistory so it starts fresh or tracks from load
+          resetRaw(parsed.animation); // Use resetRaw to load fresh state and clear history
           setCurrentStageSize(parsed.currentStageSize);
           if (parsed.onionSkinCount !== undefined) setOnionSkinCount(parsed.onionSkinCount);
           if (parsed.interpolationRatio !== undefined) setInterpolationRatio(parsed.interpolationRatio);
 
           setCurrentFrameIndex(0);
           setSelectedFrameIndices([0]);
-          pushToHistory(); // Record the loaded state as the new baseline
         } else {
           alert('專案檔案格式不正確或已毀損。');
         }
@@ -470,11 +484,11 @@ const App: React.FC = () => {
             </h1>
           </div>
           <div className="flex items-center gap-5 bg-white/40 dark:bg-slate-900/60 rounded-lg p-1">
-            <button onClick={undo} disabled={!canUndo} className="p-1.5 text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 disabled:opacity-30 rounded transition" title="復原 (Undo)">
-              <i className="fa-solid fa-clock-rotate-left"></i>
+            <button onClick={undo} disabled={!canUndo} className="p-1.5 rounded transition text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 disabled:text-slate-300 dark:disabled:text-slate-700 disabled:hover:text-slate-300 dark:disabled:hover:text-slate-700" title="復原 (Undo)">
+              <i className="fa-solid fa-rotate-left"></i>
             </button>
-            <button onClick={redo} disabled={!canRedo} className="p-1.5 text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 disabled:opacity-30 rounded transition" title="重做 (Redo)">
-              <i className="fa-solid fa-clock-rotate-right"></i>
+            <button onClick={redo} disabled={!canRedo} className="p-1.5 rounded transition text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 disabled:text-slate-300 dark:disabled:text-slate-700 disabled:hover:text-slate-300 dark:disabled:hover:text-slate-700" title="重做 (Redo)">
+              <i className="fa-solid fa-rotate-right"></i>
             </button>
             <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
             <button onClick={() => { if (window.confirm('確定要清除所有進度並重設畫布嗎？')) reset(); }} className="p-1.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition" title="清空重設 (Reset Workspace)">
@@ -584,7 +598,7 @@ const App: React.FC = () => {
             <button
               onClick={handleRemoveNode}
               disabled={!isEndNodeSelected || (currentFigure && !currentFigure.nodes[selectedNodeId!]?.parentId)}
-              className="p-2 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700/80 rounded-xl text-slate-600 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-all shadow-sm group flex items-center justify-center aspect-square disabled:opacity-30 disabled:pointer-events-none"
+              className="p-2 bg-white/50 dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl text-slate-600 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-all shadow-sm group flex items-center justify-center aspect-square disabled:opacity-30 disabled:pointer-events-none"
               title="移除末端節點"
             >
               <i className="fa-solid fa-scissors text-xl group-hover:scale-110 transition-transform"></i>
@@ -744,7 +758,7 @@ const App: React.FC = () => {
                 };
                 setAnimation({ ...animation, keyframes: newKeyframes }, skipHistory);
               }}
-              onDragStart={() => pushToHistory()}
+              onDragStart={() => pushAnimationHistory()}
               showStaticHandles={showStaticHandles}
               width={canvasSize.width}
               height={canvasSize.height}
