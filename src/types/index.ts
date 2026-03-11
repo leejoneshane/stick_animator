@@ -52,6 +52,7 @@ export interface Keyframe {
   id: string;
   figureStates: Record<string, Figure>; // figureId -> Figure state at this frame
   duration: number; // For manual in-betweening control (0-1)
+  thumbnail?: string; // Base64 DataURL representation of the frame stage
 }
 
 export interface Animation {

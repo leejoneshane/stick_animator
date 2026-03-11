@@ -18,9 +18,14 @@ interface CanvasViewProps {
     onionSkins?: Record<string, Figure>[];
     onDragStart?: () => void;
     isFigureRotationMode?: boolean;
+    backgroundImageUrl?: string | null;
 }
 
-export const CanvasView: React.FC<CanvasViewProps> = ({
+export interface CanvasViewHandle {
+    getSnapshot: () => string | undefined;
+}
+
+export const CanvasView = React.forwardRef<CanvasViewHandle, CanvasViewProps>(({
     figures,
     onChange,
     showStaticHandles,
@@ -34,11 +39,49 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
     stageWidth,
     stageHeight,
     onDragStart,
-    isFigureRotationMode = false
-}) => {
+    isFigureRotationMode = false,
+    backgroundImageUrl
+}, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
     const dragStartedRef = useRef(false);
+    const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
+
+    // Load background image
+    useEffect(() => {
+        if (!backgroundImageUrl) {
+            setBgImage(null);
+            return;
+        }
+        const img = new Image();
+        img.onload = () => setBgImage(img);
+        img.src = backgroundImageUrl;
+    }, [backgroundImageUrl]);
+
+    React.useImperativeHandle(ref, () => ({
+        getSnapshot: () => {
+            const canvas = canvasRef.current;
+            if (!canvas) return undefined;
+
+            if (stageWidth && stageHeight) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = stageWidth / 2; // Thumbnail resolution scaling
+                tempCanvas.height = stageHeight / 2;
+                const ctx = tempCanvas.getContext('2d');
+                if (ctx) {
+                    const offsetX = (canvas.width - stageWidth) / 2;
+                    const offsetY = (canvas.height - stageHeight) / 2;
+                    ctx.drawImage(
+                        canvas,
+                        offsetX, offsetY, stageWidth, stageHeight,
+                        0, 0, tempCanvas.width, tempCanvas.height
+                    );
+                    return tempCanvas.toDataURL('image/jpeg', 0.7);
+                }
+            }
+            return canvas.toDataURL('image/jpeg', 0.7);
+        }
+    }));
 
     // Calculate topological depth of figures based on attachments (links)
     const sortedFigures = React.useMemo(() => {
@@ -105,7 +148,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         ctx.clearRect(0, 0, width, height);
 
         // Draw Dark Backend
-        ctx.fillStyle = '#111116';
+        ctx.fillStyle = '#333333';
         ctx.fillRect(0, 0, width, height);
 
         // Draw Stage Area
@@ -113,12 +156,38 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             const offsetX = (width - stageWidth) / 2;
             const offsetY = (height - stageHeight) / 2;
 
-            ctx.fillStyle = '#22222a'; // Lighter stage area
+            ctx.fillStyle = '#e2e8f0'; // Light gray stage area
             ctx.fillRect(offsetX, offsetY, stageWidth, stageHeight);
 
+            // Draw Background Image
+            if (bgImage) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(offsetX, offsetY, stageWidth, stageHeight);
+                ctx.clip();
+
+                const imgRatio = bgImage.width / bgImage.height;
+                const stageRatio = stageWidth / stageHeight;
+                let drawWidth, drawHeight, drawX, drawY;
+
+                if (imgRatio > stageRatio) {
+                    drawHeight = stageHeight;
+                    drawWidth = bgImage.width * (stageHeight / bgImage.height);
+                    drawX = offsetX + (stageWidth - drawWidth) / 2;
+                    drawY = offsetY;
+                } else {
+                    drawWidth = stageWidth;
+                    drawHeight = bgImage.height * (stageWidth / bgImage.width);
+                    drawX = offsetX;
+                    drawY = offsetY + (stageHeight - drawHeight) / 2;
+                }
+                ctx.drawImage(bgImage, drawX, drawY, drawWidth, drawHeight);
+                ctx.restore();
+            }
+
             // Subtle stage border
-            ctx.strokeStyle = '#333340';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#cccccc';
+            ctx.lineWidth = 1;
             ctx.strokeRect(offsetX, offsetY, stageWidth, stageHeight);
         }
 
@@ -175,7 +244,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                 ctx.globalAlpha = 1.0;
             }
         }
-    }, [figures, sortedFigures, showStaticHandles, width, height, stageWidth, stageHeight, selectedNodeId, selectedFigureId, onionSkins]);
+    }, [figures, sortedFigures, showStaticHandles, width, height, stageWidth, stageHeight, selectedNodeId, selectedFigureId, onionSkins, bgImage]);
 
     const handleMouseDown = (e: React.MouseEvent) => {
         const rect = canvasRef.current?.getBoundingClientRect();
@@ -252,8 +321,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
         const newFigures = { ...figures };
         const newNodes = { ...activeFigure.nodes };
 
-        let dx = 0;
-        let dy = 0;
+        let appliedDeltaAngle = 0;
+        let rotatedNodes = new Set<string>();
+        let hasMovement = false;
 
         if (!node.parentId) {
             // Root movement
@@ -261,10 +331,9 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             if (node.link) {
                 newNodes[draggingNodeId] = { ...node, link: undefined, relX: mousePos.x, relY: mousePos.y };
             } else {
-                dx = mousePos.x - node.relX;
-                dy = mousePos.y - node.relY;
                 newNodes[draggingNodeId] = { ...node, relX: mousePos.x, relY: mousePos.y };
             }
+            hasMovement = true;
         } else {
             // Forward Kinematics (Rotation/Scaling)
             const isStretching = e.shiftKey || node.handleType === 'STRETCH';
@@ -278,13 +347,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                     relX: mousePos.x - parentPos.x,
                     relY: mousePos.y - parentPos.y
                 };
-
-                const newAbsPos = {
-                    x: parentPos.x + newNodes[draggingNodeId].relX,
-                    y: parentPos.y + newNodes[draggingNodeId].relY
-                };
-                dx = newAbsPos.x - oldAbsPos.x;
-                dy = newAbsPos.y - oldAbsPos.y;
+                hasMovement = true;
             } else {
                 // Rotation Mode - Find true pivot by climbing STATIC joints
                 let pivotNodeId = node.parentId;
@@ -306,6 +369,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                 const oldAngle = Math.atan2(oldAbsPos.y - pivotAbsPos.y, oldAbsPos.x - pivotAbsPos.x);
                 const newAngle = Math.atan2(mousePos.y - pivotAbsPos.y, mousePos.x - pivotAbsPos.x);
                 const deltaAngle = newAngle - oldAngle;
+                appliedDeltaAngle = deltaAngle;
 
                 // Recursively apply rotation to ALL nodes that descend from the true pivot.
                 const descendants: string[] = [];
@@ -339,6 +403,7 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                 }
 
                 if (descendants.length > 0) {
+                    rotatedNodes = new Set(descendants);
                     const s = Math.sin(deltaAngle);
                     const c = Math.cos(deltaAngle);
 
@@ -353,61 +418,69 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
                             relY: oldX * s + oldY * c
                         };
                     });
+                    hasMovement = true;
                 }
-
-                // Calculate absolute delta of the dragged node recursively to cascade to linked figures
-                // We fake a figure state block to calculate the new absolute pos
-                const tempFigure = { ...activeFigure, nodes: newNodes };
-                const newAbsPos = getNodeAbsPos(tempFigure, draggingNodeId);
-
-                dx = newAbsPos.x - oldAbsPos.x;
-                dy = newAbsPos.y - oldAbsPos.y;
             }
         }
 
         newFigures[selectedFigureId] = { ...activeFigure, nodes: newNodes };
 
-        // Handle cascading links (if this figure moved, move everything attached to it recursively)
-        if (dx !== 0 || dy !== 0) {
-            const moveLinkedFigures = (anchorNodeId: string, deltaX: number, deltaY: number) => {
-                Object.keys(newFigures).forEach(figId => {
-                    if (figId === selectedFigureId) return;
-                    const fig = newFigures[figId];
-                    const rootNode = fig.nodes[fig.rootId];
-                    if (rootNode && rootNode.link === anchorNodeId) {
-                        newFigures[figId] = {
-                            ...fig,
-                            nodes: {
-                                ...fig.nodes,
-                                [fig.rootId]: {
-                                    ...rootNode,
-                                    relX: rootNode.relX + deltaX,
-                                    relY: rootNode.relY + deltaY
-                                }
-                            }
-                        };
-                        // Recursively move things attached to THIS figure's nodes
-                        Object.values(newFigures[figId].nodes).forEach(n => moveLinkedFigures(n.id, deltaX, deltaY));
-                    }
-                });
-            };
-
+        // Handle cascading links structurally through absolute anchor tracking
+        if (hasMovement) {
             if (!dragStartedRef.current) {
                 if (onDragStart) onDragStart();
                 dragStartedRef.current = true;
             }
 
-            // If we moved the root, we move all children (FK), so anything attached to ANY node of this figure moves
-            if (!node.parentId) {
-                Object.values(newNodes).forEach(n => moveLinkedFigures(n.id, dx, dy));
-            } else {
-                // We only moved this specific node and its children
-                const moveChildrenLinks = (nId: string, dX: number, dY: number) => {
-                    moveLinkedFigures(nId, dX, dY);
-                    newNodes[nId].children.forEach(childId => moveChildrenLinks(childId, dX, dY));
-                };
-                moveChildrenLinks(draggingNodeId, dx, dy);
-            }
+            const updateLinkedFigures = (anchorFigId: string, anchorRotatedSet: Set<string>, angle: number) => {
+                const anchorFig = newFigures[anchorFigId];
+                Object.keys(newFigures).forEach(figId => {
+                    if (figId === selectedFigureId) return;
+                    const fig = newFigures[figId];
+                    const rootNode = fig.nodes[fig.rootId];
+
+                    if (rootNode && rootNode.link && anchorFig.nodes[rootNode.link]) {
+                        const isInheritingRotation = angle !== 0 && (anchorRotatedSet.has(rootNode.link) || anchorFigId !== selectedFigureId);
+                        const newAnchorAbsPos = getNodeAbsPos(anchorFig, rootNode.link);
+
+                        const updatedNodes = { ...fig.nodes };
+
+                        updatedNodes[fig.rootId] = {
+                            ...rootNode,
+                            relX: newAnchorAbsPos.x,
+                            relY: newAnchorAbsPos.y
+                        };
+
+                        if (isInheritingRotation && angle !== 0) {
+                            const s = Math.sin(angle);
+                            const c = Math.cos(angle);
+                            Object.keys(updatedNodes).forEach(nId => {
+                                if (nId !== fig.rootId) {
+                                    const n = updatedNodes[nId];
+                                    const oldX = n.relX;
+                                    const oldY = n.relY;
+                                    updatedNodes[nId] = {
+                                        ...n,
+                                        relX: oldX * c - oldY * s,
+                                        relY: oldX * s + oldY * c
+                                    };
+                                }
+                            });
+                        }
+
+                        newFigures[figId] = {
+                            ...fig,
+                            nodes: updatedNodes
+                        };
+
+                        const childRotatedSet = isInheritingRotation ? new Set(Object.keys(updatedNodes)) : new Set<string>();
+                        updateLinkedFigures(figId, childRotatedSet, isInheritingRotation ? angle : 0);
+                    }
+                });
+            };
+
+            const mainRotatedSet = appliedDeltaAngle !== 0 ? rotatedNodes : new Set(Object.keys(newNodes));
+            updateLinkedFigures(selectedFigureId, mainRotatedSet, appliedDeltaAngle);
         }
 
         onChange(newFigures, true);
@@ -478,4 +551,4 @@ export const CanvasView: React.FC<CanvasViewProps> = ({
             className="bg-neutral-950 cursor-crosshair block"
         />
     );
-};
+});

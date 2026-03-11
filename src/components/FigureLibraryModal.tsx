@@ -74,8 +74,8 @@ export const FigureLibraryModal: React.FC<FigureLibraryModalProps> = ({
                                 key={template.id}
                                 onClick={() => setSelectedIndex(index)}
                                 className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all ${selectedIndex === index
-                                        ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
-                                        : 'text-neutral-400 hover:bg-neutral-800 border border-transparent hover:border-neutral-700/50'
+                                    ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
+                                    : 'text-neutral-400 hover:bg-neutral-800 border border-transparent hover:border-neutral-700/50'
                                     }`}
                             >
                                 {template.name}
@@ -118,7 +118,8 @@ export const FigureLibraryModal: React.FC<FigureLibraryModalProps> = ({
                                 onClose();
                             }
                         }}
-                        className="px-6 py-2 rounded-lg text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all"
+                        className="px-6 py-2 rounded-lg text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all"
+                        style={{ boxShadow: '0 0 15px rgba(37,99,235,0.4)' }}
                     >
                         新增此物件
                     </button>

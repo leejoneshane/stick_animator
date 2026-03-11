@@ -13,7 +13,7 @@ export function renderFigure(
         selectedNodeId?: string | null;
     }
 ) {
-    const { showHandles, showStaticHandles, opacity = 1, colorOverride, isSelectedObject = true, selectedNodeId = null } = options;
+    const { showHandles, showStaticHandles, opacity = 1, colorOverride, isSelectedObject = true } = options;
 
     // Sort nodes by zOrder for rendering
     const nodes = Object.values(figure.nodes).sort((a, b) => a.zOrder - b.zOrder);

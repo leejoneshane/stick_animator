@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Layers, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Trash2, Download, Monitor, Undo2, Redo2, RotateCcw, Save, FolderOpen } from 'lucide-react';
+import { Layers, Eye, EyeOff, Save, FolderOpen } from 'lucide-react';
 import type { Figure, Keyframe, Animation, FigureNode, StageDimensions } from './types';
 
 const STAGE_SIZES: Record<string, StageDimensions> = {
@@ -10,7 +10,7 @@ const STAGE_SIZES: Record<string, StageDimensions> = {
   '430x932': { width: 430, height: 932 },
 };
 import { createDefaultStickman, createFigureFromTemplate } from './engine/defaults';
-import { CanvasView } from './components/CanvasView';
+import { CanvasView, type CanvasViewHandle } from './components/CanvasView';
 import { FigureLibraryModal } from './components/FigureLibraryModal';
 import { ColorPalette } from './components/ColorPalette';
 import { interpolateFigures } from './engine/math';
@@ -109,6 +109,17 @@ const App: React.FC = () => {
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
   const [isFigureRotationMode, setIsFigureRotationMode] = useState(false);
   const canvasContainerRef = React.useRef<HTMLDivElement>(null);
+  const canvasViewRef = React.useRef<CanvasViewHandle>(null);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+
+  const handleBackgroundImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (backgroundImageUrl) URL.revokeObjectURL(backgroundImageUrl);
+      const url = URL.createObjectURL(file);
+      setBackgroundImageUrl(url);
+    }
+  };
 
   useEffect(() => {
     if (!canvasContainerRef.current) return;
@@ -145,13 +156,31 @@ const App: React.FC = () => {
     setAnimation({ ...animation, keyframes: newKeyframes }, skipHistory);
   };
 
+  const handleScaleFigure = (factor: number) => {
+    if (!currentFigure) return;
+    const newNodes = { ...currentFigure.nodes };
+    Object.keys(newNodes).forEach(key => {
+      const n = newNodes[key];
+      const updated = { ...n, thickness: n.thickness * factor };
+      if (key !== currentFigure.rootId) {
+        updated.relX = n.relX * factor;
+        updated.relY = n.relY * factor;
+      }
+      newNodes[key] = updated;
+    });
+    const newFigure = { ...currentFigure, nodes: newNodes };
+    handleFigureChange(newFigure);
+  };
+
   const addFrame = () => {
+    const snapshot = !isPlaying ? canvasViewRef.current?.getSnapshot() : undefined;
     const newFrame: Keyframe = {
       id: uuidv4(),
       figureStates: JSON.parse(JSON.stringify(currentKeyframe.figureStates)),
       duration: 0.5
     };
     const newKeyframes = [...animation.keyframes];
+    if (snapshot) newKeyframes[currentFrameIndex] = { ...newKeyframes[currentFrameIndex], thumbnail: snapshot };
     newKeyframes.splice(currentFrameIndex + 1, 0, newFrame);
     setAnimation({ ...animation, keyframes: newKeyframes });
     setCurrentFrameIndex(currentFrameIndex + 1);
@@ -166,6 +195,7 @@ const App: React.FC = () => {
 
   const insertInbetween = () => {
     if (currentFrameIndex === 0) return;
+    const snapshot = !isPlaying ? canvasViewRef.current?.getSnapshot() : undefined;
     const prevFrame = animation.keyframes[currentFrameIndex - 1];
     const nextFrame = animation.keyframes[currentFrameIndex];
 
@@ -186,11 +216,25 @@ const App: React.FC = () => {
     };
 
     const newKeyframes = [...animation.keyframes];
+    if (snapshot) newKeyframes[currentFrameIndex] = { ...newKeyframes[currentFrameIndex], thumbnail: snapshot };
     newKeyframes.splice(currentFrameIndex, 0, newFrame);
     setAnimation({ ...animation, keyframes: newKeyframes });
   };
 
   const [selectedFrameIndices, setSelectedFrameIndices] = useState<number[]>([0]);
+
+  const navigateFrame = (newIndex: number) => {
+    if (newIndex === currentFrameIndex) return;
+    if (!isPlaying) {
+      const snapshot = canvasViewRef.current?.getSnapshot();
+      if (snapshot) {
+        const newKeyframes = [...animation.keyframes];
+        newKeyframes[currentFrameIndex] = { ...newKeyframes[currentFrameIndex], thumbnail: snapshot };
+        setAnimation({ ...animation, keyframes: newKeyframes }, true);
+      }
+    }
+    setCurrentFrameIndex(newIndex);
+  };
 
   const toggleFrameSelection = (index: number, isMulti: boolean) => {
     if (isMulti) {
@@ -201,7 +245,7 @@ const App: React.FC = () => {
       }
     } else {
       setSelectedFrameIndices([index]);
-      setCurrentFrameIndex(index);
+      navigateFrame(index);
     }
   };
 
@@ -312,6 +356,33 @@ const App: React.FC = () => {
     setSelectedNodeId(newNodeId);
   };
 
+  const handleRemoveNode = () => {
+    if (!currentFigure || !selectedNodeId) return;
+    const nodeToRemove = currentFigure.nodes[selectedNodeId];
+    // Cannot delete root node this way (must use remove object)
+    if (!nodeToRemove || !nodeToRemove.parentId) return;
+
+    // Ensure it is truly an end/leaf node
+    if (Object.values(currentFigure.nodes).some(n => n.parentId === selectedNodeId)) return;
+
+    const newFig = { ...currentFigure };
+    const parentId = nodeToRemove.parentId;
+    const newNodes = { ...newFig.nodes };
+
+    delete newNodes[selectedNodeId];
+
+    if (newNodes[parentId]) {
+      newNodes[parentId] = {
+        ...newNodes[parentId],
+        children: (newNodes[parentId].children || []).filter(id => id !== selectedNodeId)
+      };
+    }
+
+    newFig.nodes = newNodes;
+    handleFigureChange(newFig);
+    setSelectedNodeId(parentId);
+  };
+
   const isEndNodeSelected = selectedNodeId && currentFigure && !Object.values(currentFigure.nodes).some(n => n.parentId === selectedNodeId);
 
   const handleSaveProject = () => {
@@ -389,56 +460,65 @@ const App: React.FC = () => {
 
 
   return (
-    <div className="flex flex-col h-screen bg-[#050508] text-white font-sans overflow-hidden">
+    <div className="flex flex-col h-screen bg-transparent text-slate-800 dark:text-slate-100 font-sans overflow-hidden">
       {/* Top Navigation Bar */}
-      <nav className="relative w-full h-14 shrink-0 bg-[#0a0a0f]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-6 z-40">
+      <nav className="relative w-full h-12 shrink-0 glass-header flex items-center justify-between px-6 z-40">
         <div className="flex justify-between items-center w-full">
           <div className="flex items-center gap-3">
-            <h1 className="text-sm font-medium tracking-wider text-neutral-200">火柴人動畫</h1>
+            <h1 className="text-2xl font-black tracking-widest bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-500 text-transparent bg-clip-text font-['Outfit'] pr-2">
+              火柴人動畫
+            </h1>
           </div>
-          <div className="flex items-center gap-5 bg-neutral-900 rounded-lg">
-            <button onClick={undo} disabled={!canUndo} className="p-1.5 text-neutral-400 hover:text-white disabled:opacity-30 disabled:hover:text-neutral-400 hover:bg-neutral-800 rounded transition" title="復原 (Undo)">
+          <div className="flex items-center gap-5 bg-white/40 dark:bg-slate-900/60 rounded-lg p-1">
+            <button onClick={undo} disabled={!canUndo} className="p-1.5 text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 disabled:opacity-30 rounded transition" title="復原 (Undo)">
               <i className="fa-solid fa-clock-rotate-left"></i>
             </button>
-            <button onClick={redo} disabled={!canRedo} className="p-1.5 text-neutral-400 hover:text-white disabled:opacity-30 disabled:hover:text-neutral-400 hover:bg-neutral-800 rounded transition" title="重做 (Redo)">
+            <button onClick={redo} disabled={!canRedo} className="p-1.5 text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 disabled:opacity-30 rounded transition" title="重做 (Redo)">
               <i className="fa-solid fa-clock-rotate-right"></i>
             </button>
-            <div className="w-px h-4 bg-neutral-800 mx-1" />
-            <button onClick={() => { if (window.confirm('確定要清除所有進度並重設畫布嗎？')) reset(); }} className="p-1.5 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded transition" title="清空重設 (Reset Workspace)">
+            <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+            <button onClick={() => { if (window.confirm('確定要清除所有進度並重設畫布嗎？')) reset(); }} className="p-1.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition" title="清空重設 (Reset Workspace)">
               <i className="fa-solid fa-arrows-rotate"></i>
             </button>
-            <i className="fa-solid fa-display"></i>
+            <i className="fa-solid fa-display text-slate-500 dark:text-slate-400 ml-2"></i>
             <select
               value={currentStageSize}
               onChange={(e) => setCurrentStageSize(e.target.value)}
-              className="bg-transparent text-xs text-blue-300 font-bold focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-blue-800 dark:text-blue-300 font-bold focus:outline-none cursor-pointer pr-1"
             >
               {Object.keys(STAGE_SIZES).map(size => (
-                <option key={size} value={size} className="bg-neutral-900 text-white font-bold">{size}</option>
+                <option key={size} value={size} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold">{size}</option>
               ))}
             </select>
+            <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+            <label
+              className="p-1.5 text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 rounded transition cursor-pointer"
+              title="上傳舞台背景圖"
+            >
+              <i className="fa-regular fa-image"></i>
+              <input type="file" accept="image/jpeg, image/png, image/webp" className="hidden" onChange={handleBackgroundImageUpload} />
+            </label>
           </div>
-          <div className="w-px h-4 bg-neutral-800 mx-2" />
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveProject}
-              className="flex items-center gap-2 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-lg transition-all text-xs border border-neutral-700 hover:border-neutral-500"
-              title="儲存專案 (Save Project)"
+              className="flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-slate-800/50 hover:bg-white/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-all text-xs border border-slate-300/50 dark:border-slate-700 shadow-sm"
+              title="儲存專案"
             >
               <Save className="w-4 h-4" /> 儲存專案
             </button>
             <label
-              className="flex items-center gap-2 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-lg transition-all text-xs border border-neutral-700 hover:border-neutral-500 cursor-pointer"
-              title="讀取專案 (Load Project)"
+              className="flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-slate-800/50 hover:bg-white/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-all text-xs border border-slate-300/50 dark:border-slate-700 shadow-sm cursor-pointer"
+              title="讀取專案"
             >
               <FolderOpen className="w-4 h-4" /> 讀取專案
               <input type="file" accept=".project" className="hidden" onChange={handleLoadProject} />
             </label>
-            <div className="w-px h-4 bg-neutral-800 mx-1" />
+            <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
             <button
               onClick={handleExportGif}
               disabled={exporting}
-              className="flex items-center gap-3 px-4 py-1.5 bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 rounded-lg transition-all font-black text-xs shadow-xl shadow-blue-900/40 active:scale-95 disabled:opacity-50 ring-1 ring-blue-400/30"
+              className="flex items-center gap-3 px-4 py-1.5 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white rounded-lg transition-all font-black text-xs shadow-md shadow-blue-500/30 active:scale-95 disabled:opacity-50 border-none"
             >
               <i className={`fa-solid ${exporting ? 'fa-spinner animate-spin' : 'fa-download'}`} /> {exporting ? '匯出中...' : '匯出 GIF'}
             </button>
@@ -450,11 +530,10 @@ const App: React.FC = () => {
       <div className="flex flex-1 h-full relative z-10 w-full overflow-hidden">
         {isPlaying && (
           <div
-            className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center cursor-not-allowed"
-            onClick={(e) => { e.stopPropagation(); alert('播放時無法編輯影格內容'); }}
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
           >
-            <div className="bg-red-500/90 text-white px-8 py-4 rounded-2xl font-black shadow-[0_0_50px_rgba(239,68,68,0.5)] flex items-center gap-4 text-xl tracking-widest pointer-events-none">
-              <i className="fa-solid fa-pause text-[24px]" /> 播放時無法編輯影格內容
+            <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 text-white/90 px-6 py-3 rounded-full font-bold flex items-center gap-3 text-sm tracking-widest shadow-2xl" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+              <i className="fa-solid fa-pause text-red-400" /> 播放時無法編輯影格內容
             </div>
           </div>
         )}
@@ -472,73 +551,106 @@ const App: React.FC = () => {
         />
 
         {/* Left Toolbar (Tools) */}
-        <div className="w-16 border-r border-white/5 bg-[#0a0a0f] flex flex-col items-center py-4 z-20 shadow-2xl gap-4">
-          <button
-            onClick={() => handleAddShape('LINE')}
-            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group flex items-center justify-center aspect-square flex-shrink-0"
-            title="新增線條"
-          >
-            <i className="fa-solid fa-minus text-xl"></i>
-          </button>
+        <div className="w-24 border-r border-slate-200/50 dark:border-white/5 glass-panel flex flex-col items-center py-4 z-20 gap-3 overflow-y-auto">
+
+          {/* Row 1: Shapes */}
+          <div className="grid grid-cols-2 gap-2 w-full px-2">
+            <button
+              onClick={() => handleAddShape('LINE')}
+              className="p-2 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700/80 rounded-xl text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white transition-all shadow-sm group flex items-center justify-center aspect-square"
+              title="新增線條"
+            >
+              <i className="fa-solid fa-minus text-2xl group-hover:scale-110 transition-transform"></i>
+            </button>
+            <button
+              onClick={() => handleAddShape('CIRCLE')}
+              className="p-2 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700/80 rounded-xl text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white transition-all shadow-sm group flex items-center justify-center aspect-square"
+              title="新增圓形"
+            >
+              <i className="fa-regular fa-circle text-2xl group-hover:scale-110 transition-transform"></i>
+            </button>
+          </div>
+
+          {/* Row 2: Nodes */}
+          <div className="grid grid-cols-2 gap-2 w-full px-2">
+            <button
+              onClick={handleExtendNode}
+              disabled={!isEndNodeSelected}
+              className="p-2 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700/80 rounded-xl text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white transition-all shadow-sm group flex items-center justify-center aspect-square disabled:opacity-30 disabled:pointer-events-none"
+              title="新增節點 (從末端延伸)"
+            >
+              <i className="fa-solid fa-diagram-project text-xl group-hover:scale-110 transition-transform"></i>
+            </button>
+            <button
+              onClick={handleRemoveNode}
+              disabled={!isEndNodeSelected || (currentFigure && !currentFigure.nodes[selectedNodeId!]?.parentId)}
+              className="p-2 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700/80 rounded-xl text-slate-600 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-all shadow-sm group flex items-center justify-center aspect-square disabled:opacity-30 disabled:pointer-events-none"
+              title="移除末端節點"
+            >
+              <i className="fa-solid fa-scissors text-xl group-hover:scale-110 transition-transform"></i>
+            </button>
+          </div>
+
+          <div className="w-16 h-px bg-slate-300 dark:bg-slate-700 my-1" />
+
+          {/* Row 3: Add / Delete Figure */}
+          <div className="grid grid-cols-2 gap-2 w-full px-2">
+            <button
+              onClick={() => setIsLibraryModalOpen(true)}
+              className="p-2 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700/80 rounded-xl text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white transition-all shadow-sm group flex items-center justify-center aspect-square"
+              title="新增物件"
+            >
+              <i className="fa-solid fa-circle-plus text-xl group-hover:scale-110 transition-transform"></i>
+            </button>
+            <button
+              onClick={() => {
+                if (!selectedFigureId) return;
+                const newFigureStates = { ...currentKeyframe.figureStates };
+                delete newFigureStates[selectedFigureId];
+
+                const newKeyframes = [...animation.keyframes];
+                newKeyframes[currentFrameIndex] = {
+                  ...currentKeyframe,
+                  figureStates: newFigureStates
+                };
+                setAnimation({ ...animation, keyframes: newKeyframes });
+                setSelectedFigureId(Object.keys(newFigureStates)[0] || 'none');
+              }}
+              className="p-2 bg-white/50 dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl text-slate-600 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-all shadow-sm group flex items-center justify-center aspect-square disabled:opacity-30"
+              title="移除物件"
+              disabled={!currentKeyframe.figureStates[selectedFigureId]}
+            >
+              <i className="fa-solid fa-trash-can text-xl group-hover:scale-110 transition-transform"></i>
+            </button>
+          </div>
+
+          {/* Row 4: Scale Up / Scale Down */}
+          <div className="grid grid-cols-2 gap-2 w-full px-2">
+            <button
+              onClick={() => handleScaleFigure(1.1)}
+              className="p-2 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700/80 rounded-xl text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all shadow-sm group flex items-center justify-center aspect-square"
+              title="物件放大 10%"
+            >
+              <i className="fa-solid fa-magnifying-glass-plus text-xl group-hover:scale-110 transition-transform"></i>
+            </button>
+            <button
+              onClick={() => handleScaleFigure(0.9)}
+              className="p-2 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700/80 rounded-xl text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all shadow-sm group flex items-center justify-center aspect-square"
+              title="物件縮小 10%"
+            >
+              <i className="fa-solid fa-magnifying-glass-minus text-xl group-hover:scale-110 transition-transform"></i>
+            </button>
+          </div>
+
+          <div className="w-16 h-px bg-slate-300 dark:bg-slate-700 my-1 flex-shrink-0" />
 
           <button
-            onClick={() => handleAddShape('CIRCLE')}
-            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group flex items-center justify-center aspect-square flex-shrink-0"
-            title="新增圓形"
-          >
-            <i className="fa-regular fa-circle text-xl"></i>
-          </button>
-
-          <button
-            onClick={handleExtendNode}
-            disabled={!isEndNodeSelected}
-            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group flex items-center justify-center aspect-square flex-shrink-0 disabled:opacity-30 disabled:pointer-events-none"
-            title="新增節點 (從末端延伸)"
-          >
-            <i className="fa-solid fa-code-branch text-xl"></i>
-          </button>
-
-          <div className="w-8 h-px bg-neutral-800 my-2" />
-
-          <button
-            onClick={() => setIsLibraryModalOpen(true)}
-            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group flex items-center justify-center aspect-square flex-shrink-0"
-            title="新增物件"
-          >
-            <i className="fa-solid fa-circle-plus text-xl"></i>
-          </button>
-
-          <button
-            onClick={() => {
-              if (!selectedFigureId) return;
-              const newFigureStates = { ...currentKeyframe.figureStates };
-              delete newFigureStates[selectedFigureId];
-
-              const newKeyframes = [...animation.keyframes];
-              newKeyframes[currentFrameIndex] = {
-                ...currentKeyframe,
-                figureStates: newFigureStates
-              };
-              setAnimation({ ...animation, keyframes: newKeyframes });
-              setSelectedFigureId(Object.keys(newFigureStates)[0] || 'none');
-            }}
-            className="p-3 bg-neutral-800/50 hover:bg-red-500/20 rounded-xl text-neutral-400 hover:text-red-400 transition-all group flex items-center justify-center aspect-square flex-shrink-0 disabled:opacity-30"
-            title="移除物件"
-            disabled={!currentKeyframe.figureStates[selectedFigureId]}
-          >
-            <i className="fa-solid fa-trash-can text-xl"></i>
-          </button>
-
-          <div className="w-8 h-px bg-neutral-800 my-2" />
-
-          <button
-            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group flex items-center justify-center aspect-square flex-shrink-0 disabled:opacity-30"
+            className="p-3 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700/80 rounded-2xl text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white transition-all shadow-sm group flex items-center justify-center aspect-square flex-shrink-0 disabled:opacity-30"
             title="匯出物件"
             disabled={!currentFigure}
             onClick={() => {
               if (!currentFigure) return;
 
-              // De-instantiate the live Figure back into a generic SkeletonTemplate
               const idMap: Record<string, string> = {};
               Object.values(currentFigure.nodes).forEach((n, i) => {
                 idMap[n.id] = `node_${i}`;
@@ -570,14 +682,14 @@ const App: React.FC = () => {
               a.click();
             }}
           >
-            <i className="fa-solid fa-download text-xl"></i>
+            <i className="fa-solid fa-download text-3xl group-hover:scale-110 transition-transform"></i>
           </button>
 
           <button
-            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group relative flex items-center justify-center aspect-square flex-shrink-0"
+            className="p-3 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700/80 rounded-2xl text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white transition-all shadow-sm group relative flex items-center justify-center aspect-square flex-shrink-0"
             title="匯入物件"
           >
-            <i className="fa-solid fa-upload text-xl"></i>
+            <i className="fa-solid fa-upload text-3xl group-hover:scale-110 transition-transform"></i>
             <input
               type="file"
               accept=".figure,.json"
@@ -591,7 +703,6 @@ const App: React.FC = () => {
                     const parsed = JSON.parse(event.target?.result as string);
 
                     let importedFigure: Figure;
-                    // Detect if the loaded JSON is a raw Template (Array of nodes) or a saved live state
                     if (parsed.nodes && Array.isArray(parsed.nodes)) {
                       importedFigure = createFigureFromTemplate(parsed);
                     } else if (parsed.id && parsed.nodes) {
@@ -619,9 +730,11 @@ const App: React.FC = () => {
 
         {/* Center - Canvas Area */}
         <section ref={canvasContainerRef} className="flex-1 relative overflow-hidden flex items-center justify-center p-4">
-          <div className="relative group shadow-[0_0_150px_rgba(0,0,0,0.9)] rounded-3xl overflow-hidden border border-white/5 bg-[#050508]">
+          <div className="relative group rounded-3xl overflow-hidden border border-slate-300/50 dark:border-white/5 bg-slate-200 dark:bg-[#1a1a24]" style={{ boxShadow: '0 0 150px rgba(0,0,0,0.5)' }}>
             <CanvasView
+              ref={canvasViewRef}
               figures={currentKeyframe.figureStates}
+              backgroundImageUrl={backgroundImageUrl}
               isFigureRotationMode={isFigureRotationMode}
               onChange={(newFigures, skipHistory = false) => {
                 const newKeyframes = [...animation.keyframes];
@@ -653,35 +766,48 @@ const App: React.FC = () => {
         </section>
 
         {/* Right Sidebar (Properties) */}
-        <div className="w-[300px] border-l border-white/5 bg-[#0a0a0f] flex flex-col z-20 shadow-2xl overflow-y-auto">
-          <section className="p-6 border-b border-white/5">
+        <div className="w-[300px] border-l border-slate-200/50 dark:border-white/5 glass-panel flex flex-col z-20 overflow-y-auto custom-scrollbar shadow-xl text-blue-900 dark:text-blue-100">
+          <section className="p-6 border-b border-slate-200/50 dark:border-white/5">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] opacity-60">Inspector / 屬性面板</h3>
+              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">屬性面板</h3>
               <div className="flex gap-2">
                 <button
                   onClick={inverseSelection}
                   title="循環 / 反選"
-                  className="p-1 hover:bg-neutral-800 rounded text-neutral-500 hover:text-blue-400 transition-colors"
+                  className="p-1 hover:bg-white/50 dark:hover:bg-slate-800 rounded opacity-70 hover:opacity-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                 >
-                  <Layers className="w-3.5 h-3.5 rotate-180" />
+                  <Layers className="w-4 h-4" />
                 </button>
                 {selectedNodeId && currentFigure && currentFigure.nodes[selectedNodeId] && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-neutral-800 rounded text-neutral-400">
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 dark:bg-slate-800 rounded text-blue-800 dark:text-blue-300 shadow-sm border border-blue-200 dark:border-transparent">
                     {currentFigure.nodes[selectedNodeId]?.name}
                   </span>
                 )}
               </div>
             </div>
 
+            {/* Object Rotation Control (Always Visible) */}
+            <div className="p-3 mb-6 border border-slate-200 dark:border-slate-700/50 rounded-xl bg-slate-50 dark:bg-slate-900/30 flex items-center justify-between">
+              <label className="flex items-center gap-3 cursor-pointer text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="勾選此項時，拖曳任一節點皆會連帶原物件全身結構一起旋轉。">
+                <input
+                  type="checkbox"
+                  checked={isFigureRotationMode}
+                  onChange={e => setIsFigureRotationMode(e.target.checked)}
+                  className="w-4 h-4 rounded bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-blue-500 focus:ring-blue-500/30"
+                />
+                <span className="text-sm font-bold">物件旋轉模式</span>
+              </label>
+            </div>
+
             {selectedNodeId && currentFigure && currentFigure.nodes[selectedNodeId] ? (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {selectedFrameIndices.length > 1 && (
-                  <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded text-[10px] text-amber-400 font-bold mb-2">
+                  <div className="p-2 bg-amber-100 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 rounded text-[10px] text-amber-700 dark:text-amber-400 font-bold mb-2 shadow-sm">
                     🔥 正在批次編輯 {selectedFrameIndices.length} 個影格
                   </div>
                 )}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-neutral-400 block">層級控制 (前後順序)</label>
+                <div className="space-y-3">
+                  <label className="text-xs font-bold block opacity-80">層級控制 (前後順序)</label>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -691,38 +817,16 @@ const App: React.FC = () => {
                         if (selectedFrameIndices.length > 1) batchUpdateProperty('zOrder', val);
                         else updateNodeProperty(selectedNodeId, 'zOrder', val);
                       }}
-                      className="flex-1 bg-neutral-800 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+                      className="w-full h-12 bg-white/60 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-4 text-lg font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
                     />
-                    <div className="flex flex-col gap-1">
-                      <button
-                        onClick={() => {
-                          const val = currentFigure.nodes[selectedNodeId].zOrder + 1;
-                          if (selectedFrameIndices.length > 1) batchUpdateProperty('zOrder', val);
-                          else updateNodeProperty(selectedNodeId, 'zOrder', val);
-                        }}
-                        className="p-1 hover:bg-neutral-750 rounded bg-neutral-800 border border-neutral-700"
-                      >
-                        <ChevronUp className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          const val = currentFigure.nodes[selectedNodeId].zOrder - 1;
-                          if (selectedFrameIndices.length > 1) batchUpdateProperty('zOrder', val);
-                          else updateNodeProperty(selectedNodeId, 'zOrder', val);
-                        }}
-                        className="p-1 hover:bg-neutral-750 rounded bg-neutral-800 border border-neutral-700"
-                      >
-                        <ChevronDown className="w-3 h-3" />
-                      </button>
-                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-neutral-400 block mb-2">控制桿類型</label>
+                <div className="space-y-3">
+                  <label className="text-xs font-bold block opacity-80 mb-2">控制桿類型</label>
                   {!currentFigure.nodes[selectedNodeId].parentId ? (
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 py-2 px-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-500 text-center text-[10px] font-bold tracking-wider">
+                      <div className="flex-1 py-2.5 px-2 rounded-xl border bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-center text-xs font-black tracking-widest shadow-inner">
                         核心節點 (ROOT)
                       </div>
                     </div>
@@ -732,7 +836,7 @@ const App: React.FC = () => {
                         <button
                           onClick={() => updateNodeProperty(selectedNodeId, 'handleType', 'ROTATE')}
                           title="僅限旋轉"
-                          className={`flex-1 py-2 px-1 rounded-lg border text-[10px] font-bold tracking-wider transition-all ${currentFigure.nodes[selectedNodeId].handleType === 'ROTATE' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-500'}`}
+                          className={`flex-1 py-2.5 px-2 rounded-xl border text-xs font-bold tracking-wider transition-all shadow-sm ${currentFigure.nodes[selectedNodeId].handleType === 'ROTATE' ? 'bg-blue-500 border-blue-400 text-white' : 'bg-white/60 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500'}`}
                         >
                           旋轉
                         </button>
@@ -740,16 +844,16 @@ const App: React.FC = () => {
                       <button
                         onClick={() => updateNodeProperty(selectedNodeId, 'handleType', 'STRETCH')}
                         title="伸展與縮放"
-                        className={`flex-1 py-2 px-1 rounded-lg border text-[10px] font-bold tracking-wider transition-all ${currentFigure.nodes[selectedNodeId].handleType === 'STRETCH' ? 'bg-purple-600 border-purple-500 text-white' : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-500'}`}
+                        className={`flex-1 py-2.5 px-2 rounded-xl border text-xs font-bold tracking-wider transition-all shadow-sm ${currentFigure.nodes[selectedNodeId].handleType === 'STRETCH' ? 'bg-purple-500 border-purple-400 text-white' : 'bg-white/60 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500'}`}
                       >
                         伸展
                       </button>
                       <button
                         onClick={() => updateNodeProperty(selectedNodeId, 'handleType', 'STATIC')}
                         title="靜態關節"
-                        className={`flex-1 py-2 px-1 rounded-lg border text-[10px] font-bold tracking-wider transition-all ${currentFigure.nodes[selectedNodeId].handleType === 'STATIC' ? 'bg-amber-600 border-amber-500 text-white' : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-500'}`}
+                        className={`flex-1 py-2.5 px-2 rounded-xl border text-xs font-bold tracking-wider transition-all shadow-sm ${currentFigure.nodes[selectedNodeId].handleType === 'STATIC' ? 'bg-amber-500 border-amber-400 text-white' : 'bg-white/60 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500'}`}
                       >
-                        靜態
+                        靜止
                       </button>
                     </div>
                   )}
@@ -757,7 +861,7 @@ const App: React.FC = () => {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-neutral-400 block">線條粗度 (px)</label>
+                    <label className="text-xs font-bold opacity-80 block">線條粗度 (px)</label>
                     <input
                       type="number"
                       value={currentFigure.nodes[selectedNodeId].thickness}
@@ -767,7 +871,7 @@ const App: React.FC = () => {
                         if (selectedFrameIndices.length > 1) batchUpdateProperty('thickness', val);
                         else updateNodeProperty(selectedNodeId, 'thickness', val);
                       }}
-                      className="w-16 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-right focus:outline-none focus:border-blue-500"
+                      className="w-16 bg-white/60 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs text-right focus:outline-none focus:border-blue-500 shadow-sm"
                     />
                   </div>
                   <input
@@ -778,23 +882,23 @@ const App: React.FC = () => {
                       if (selectedFrameIndices.length > 1) batchUpdateProperty('thickness', val);
                       else updateNodeProperty(selectedNodeId, 'thickness', val);
                     }}
-                    className="w-full accent-blue-500 h-1.5 bg-neutral-800 rounded-lg appearance-none"
+                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer"
                   />
                 </div>
 
                 {currentFigure.nodes[selectedNodeId].parentId !== null && (
-                  <div className="pt-4 border-t border-neutral-700/50 space-y-4">
-                    <label className="text-xs font-semibold text-neutral-400 block italic">🎨 節點段屬性 (軀幹)</label>
+                  <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                    <label className="text-xs font-bold opacity-80 block italic">🎨 節點段屬性 (軀幹)</label>
 
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold text-neutral-500 block">形狀</label>
-                      <div className="flex p-1 bg-neutral-900 rounded-lg w-full">
+                      <label className="text-xs font-bold opacity-80 block">形狀</label>
+                      <div className="flex p-1 bg-slate-200 dark:bg-slate-900 rounded-lg w-full shadow-inner border border-slate-300 dark:border-slate-800">
                         <button
                           onClick={() => {
                             const seg = currentFigure.nodes[selectedNodeId].segment || { color: '#ffffff', shape: 'TRAPEZOID' };
                             updateNodeProperty(selectedNodeId, 'segment', { ...seg, shape: 'TRAPEZOID' });
                           }}
-                          className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${(!currentFigure.nodes[selectedNodeId].segment || currentFigure.nodes[selectedNodeId].segment?.shape === 'TRAPEZOID') ? 'bg-neutral-700 text-white shadow' : 'text-neutral-500 hover:text-neutral-300'}`}
+                          className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${(!currentFigure.nodes[selectedNodeId].segment || currentFigure.nodes[selectedNodeId].segment?.shape === 'TRAPEZOID') ? 'bg-white dark:bg-slate-700 text-blue-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                         >
                           梯形 (一般)
                         </button>
@@ -803,7 +907,7 @@ const App: React.FC = () => {
                             const seg = currentFigure.nodes[selectedNodeId].segment || { color: '#ffffff', shape: 'TRAPEZOID' };
                             updateNodeProperty(selectedNodeId, 'segment', { ...seg, shape: 'CIRCLE' });
                           }}
-                          className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${currentFigure.nodes[selectedNodeId].segment?.shape === 'CIRCLE' ? 'bg-neutral-700 text-white shadow' : 'text-neutral-500 hover:text-neutral-300'}`}
+                          className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${currentFigure.nodes[selectedNodeId].segment?.shape === 'CIRCLE' ? 'bg-white dark:bg-slate-700 text-blue-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                         >
                           圓形
                         </button>
@@ -811,7 +915,7 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold text-neutral-500 block">顏色選擇</label>
+                      <label className="text-xs font-bold opacity-80 block">顏色選擇</label>
                       <ColorPalette
                         selectedColor={currentFigure.nodes[selectedNodeId].segment?.color || '#ffffff'}
                         onColorSelect={(color) => {
@@ -821,48 +925,37 @@ const App: React.FC = () => {
                           else updateNodeProperty(selectedNodeId, 'segment', updatedSegment);
                         }}
                       />
-                      <div className="flex items-center justify-between text-[10px] text-neutral-500 font-mono mt-2">
-                        <span>當前顏色碼</span>
-                        <span className="bg-neutral-800 px-2 py-0.5 rounded border border-neutral-700">{currentFigure.nodes[selectedNodeId].segment?.color || '#ffffff'}</span>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-2">
+                        <span className="opacity-80">當前顏色碼</span>
+                        <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700">{currentFigure.nodes[selectedNodeId].segment?.color || '#ffffff'}</span>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="py-8 px-4 border border-dashed border-neutral-800 rounded-xl bg-neutral-900/50 flex flex-col items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer text-neutral-300 hover:text-white transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={isFigureRotationMode}
-                    onChange={e => setIsFigureRotationMode(e.target.checked)}
-                    className="w-4 h-4 rounded bg-neutral-800 border-neutral-700 text-blue-500 focus:ring-blue-500/30"
-                  />
-                  <span className="text-sm font-bold">物件旋轉</span>
-                </label>
-                <p className="text-[10px] text-neutral-500 text-left leading-relaxed">
-                  勾選此項時，拖拉任一節點皆會以核心為中心，保留現有樣態旋轉整個物件。取消勾選則為預設操作。
-                </p>
+              <div className="py-8 text-center text-slate-400 dark:text-slate-500 text-xs font-bold border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/20">
+                請點擊畫布上的節點來編輯屬性
               </div>
             )}
           </section>
 
-          <section className="p-6 border-b border-white/5">
-            <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-4">動畫設定</h3>
+          <section className="p-6 border-b border-slate-200/50 dark:border-white/5">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-60">動畫設定</h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-neutral-400">當前影格</span>
-                <span className="text-xl font-mono text-blue-400 font-black">{String(currentFrameIndex + 1).padStart(2, '0')} / {animation.keyframes.length}</span>
+                <span className="text-xs font-bold opacity-80">當前影格</span>
+                <span className="text-xl font-mono text-blue-600 dark:text-blue-400 font-black">{String(currentFrameIndex + 1).padStart(2, '0')} / {animation.keyframes.length}</span>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-neutral-400">洋蔥皮殘影</span>
+                  <span className="text-xs font-bold opacity-80">洋蔥皮殘影</span>
                   <div className="flex gap-1">
                     {[0, 1, 2, 3].map(n => (
                       <button
                         key={n}
                         onClick={() => setOnionSkinCount(n)}
-                        className={`w-5 h-5 rounded flex items-center justify-center text-[9px] font-black border transition-all ${onionSkinCount === n ? 'bg-blue-600 border-blue-500 text-white' : 'bg-neutral-800 border-neutral-700 text-neutral-500'}`}
+                        className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-black border transition-all ${onionSkinCount === n ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-500 hover:border-slate-400 dark:hover:border-slate-500'}`}
                       >
                         {n}
                       </button>
@@ -872,30 +965,30 @@ const App: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-neutral-400">播放速度 (FPS)</span>
-                  <span className="text-[10px] font-bold text-neutral-500">{animation.fps}</span>
+                  <span className="text-xs font-bold opacity-80">播放速度 (FPS)</span>
+                  <span className="text-xs font-black">{animation.fps}</span>
                 </div>
                 <input
                   type="range" min="1" max="30"
                   value={animation.fps}
                   onChange={(e) => setAnimation({ ...animation, fps: Number(e.target.value) })}
-                  className="w-full accent-blue-500 h-1 bg-neutral-800 rounded-lg appearance-none"
+                  className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
             </div>
           </section>
 
           <section className="p-6 mt-auto">
-            <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-4">檢視設定</h3>
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-60">檢視設定</h3>
             <div className="space-y-4">
               <button
                 onClick={() => setShowStaticHandles(!showStaticHandles)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all border ${showStaticHandles
-                  ? 'bg-neutral-800 border-neutral-700 text-neutral-200'
-                  : 'bg-neutral-900 border-neutral-800 text-neutral-500'
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all border font-bold ${showStaticHandles
+                  ? 'bg-blue-50 dark:bg-white/10 border-blue-200 dark:border-white/20 text-blue-900 dark:text-white'
+                  : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800 opacity-70'
                   }`}
               >
-                <span className="text-xs font-bold uppercase tracking-wider">顯示靜態節點</span>
+                <span className="text-xs uppercase tracking-wider">顯示靜態節點</span>
                 {showStaticHandles ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               </button>
             </div>
@@ -904,65 +997,68 @@ const App: React.FC = () => {
       </div >
 
       {/* Footer - Timeline */}
-      <footer className="h-44 w-full glass-header m-2 rounded-2xl flex flex-row p-4 gap-6 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] z-10">
-        <div className="flex flex-col justify-center shrink-0 bg-neutral-900/40 rounded-xl border border-white/5 p-4 shadow-inner">
+      <footer className="h-36 w-full glass-header mb-0 flex flex-row p-4 gap-6 z-10 text-slate-800 dark:text-slate-100">
+        <div className="flex flex-col justify-center shrink-0 bg-white/40 dark:bg-slate-900/60 rounded-xl border border-white/40 dark:border-white/5 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setCurrentFrameIndex(Math.max(0, currentFrameIndex - 1))}
-                className="p-3 hover:bg-neutral-800/50 rounded-xl transition-all border border-transparent hover:border-white/10 group active:scale-90"
+                onClick={() => navigateFrame(Math.max(0, currentFrameIndex - 1))}
+                className="p-3 hover:bg-white/50 dark:hover:bg-slate-800/50 rounded-xl transition-all border border-transparent hover:border-slate-300 dark:hover:border-slate-700 group active:scale-90"
               >
-                <i className="fa-solid fa-backward-step opacity-40 group-hover:opacity-100" />
+                <i className="fa-solid fa-backward-step opacity-50 group-hover:opacity-100 text-xl" />
               </button>
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
-                className={`p-5 rounded-2xl transition-all shadow-2xl active:scale-95 ${isPlaying
-                  ? 'bg-neutral-800 text-blue-400 border border-blue-500/30'
-                  : 'bg-blue-600 text-white border border-blue-400/50 glow-blue'
+                className={`w-16 h-16 rounded-2xl transition-all shadow-md active:scale-95 flex items-center justify-center ${isPlaying
+                  ? 'bg-white/80 dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30'
+                  : 'bg-gradient-to-br from-blue-500 to-blue-600 text-white border border-blue-400'
                   }`}
+                style={!isPlaying ? { boxShadow: '0 0 20px rgba(59,130,246,0.5)' } : {}}
               >
-                {isPlaying ? <i className="fa-solid fa-pause text-xl" /> : <i className="fa-solid fa-play text-xl relative left-[2px]" />}
+                {isPlaying ? <i className="fa-solid fa-pause text-2xl" /> : <i className="fa-solid fa-play text-2xl relative left-[2px]" />}
               </button>
               <button
-                onClick={() => setCurrentFrameIndex((currentFrameIndex + 1) % animation.keyframes.length)}
-                className="p-3 hover:bg-neutral-800/50 rounded-xl transition-all border border-transparent hover:border-white/10 group active:scale-90"
+                onClick={() => navigateFrame((currentFrameIndex + 1) % animation.keyframes.length)}
+                className="p-3 hover:bg-white/50 dark:hover:bg-slate-800/50 rounded-xl transition-all border border-transparent hover:border-slate-300 dark:hover:border-slate-700 group active:scale-90"
               >
-                <i className="fa-solid fa-forward-step opacity-40 group-hover:opacity-100" />
+                <i className="fa-solid fa-forward-step opacity-50 group-hover:opacity-100 text-xl" />
               </button>
 
-              <div className="flex flex-col items-center gap-1 mr-2">
-                <span className="text-[9px] font-bold text-neutral-600 uppercase">補幀比例: {interpolationRatio.toFixed(1)}</span>
+              <div className="flex flex-col items-center gap-1 mx-2">
+                <span className="text-[9px] font-bold opacity-70 uppercase tracking-wider">補幀比例: {interpolationRatio.toFixed(1)}</span>
                 <input
                   type="range" min="0.1" max="0.9" step="0.1"
                   value={interpolationRatio}
                   onChange={(e) => setInterpolationRatio(Number(e.target.value))}
-                  className="w-16 accent-blue-500 h-1 bg-neutral-800 rounded-lg appearance-none"
+                  className="w-20 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
+
+              <div className="w-px h-10 bg-slate-300 dark:bg-slate-700 mx-2" />
 
               <button
                 onClick={insertInbetween}
                 disabled={currentFrameIndex === 0}
-                className="p-3 text-neutral-600 hover:text-red-500 hover:bg-red-500 rounded-xl transition-all border border-transparent hover:border-red-500/20 active:scale-95"
+                className="p-3 opacity-70 hover:opacity-100 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-xl transition-all active:scale-95"
                 title="自動補幀"
               >
-                <i className="fa-solid fa-magic-wand-sparkles opacity-60 hover:opacity-100" />
+                <i className="fa-solid fa-magic-wand-sparkles text-2xl" />
               </button>
 
               <button
                 onClick={addFrame}
-                className="p-3 text-neutral-600 hover:text-red-500 hover:bg-red-500 rounded-xl transition-all border border-transparent hover:border-red-500/20 active:scale-95"
+                className="p-3 opacity-70 hover:opacity-100 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-xl transition-all active:scale-95"
                 title="新增影格"
               >
-                <i className="fa-solid fa-film opacity-60 hover:opacity-100" />
+                <i className="fa-solid fa-film text-2xl" />
               </button>
 
               <button
                 onClick={deleteFrame}
-                className="p-3 text-neutral-600 hover:text-red-500 hover:bg-red-500 rounded-xl transition-all border border-transparent hover:border-red-500/20 active:scale-95"
+                className="p-3 opacity-70 hover:opacity-100 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all active:scale-95"
                 title="刪除影格"
               >
-                <i className="fa-solid fa-trash opacity-60 hover:opacity-100" />
+                <i className="fa-solid fa-trash text-2xl" />
               </button>
             </div>
           </div>
@@ -972,21 +1068,30 @@ const App: React.FC = () => {
             <div
               key={frame.id}
               onClick={(e) => toggleFrameSelection(index, e.shiftKey || e.metaKey || e.ctrlKey)}
-              className={`min-w-[90px] h-full rounded-xl border-2 cursor-pointer transition-all flex flex-col relative group overflow-hidden
+              className={`min-w-[110px] h-full rounded-2xl border-2 cursor-pointer transition-all flex flex-col relative group overflow-hidden bg-white/40 dark:bg-slate-800/50 backdrop-blur-sm
                 ${selectedFrameIndices.includes(index)
-                  ? 'border-blue-500 bg-blue-500/5 shadow-[0_0_20px_rgba(59,130,246,0.15)]'
+                  ? 'border-blue-500 dark:border-blue-400 bg-blue-50/80 dark:bg-blue-900/20'
                   : index === currentFrameIndex
-                    ? 'border-neutral-600 bg-neutral-800/80 shadow-inner'
-                    : 'border-neutral-800 bg-neutral-800/50 hover:border-neutral-600 hover:bg-neutral-800'}`}
+                    ? 'border-slate-400 dark:border-slate-500 bg-white/80 dark:bg-slate-700/80 shadow-inner'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-white/60 dark:hover:bg-slate-700'}`}
             >
-              <div className={`absolute top-0 left-0 right-0 h-1 transition-all ${selectedFrameIndices.includes(index) ? 'bg-blue-500' : 'bg-transparent'}`} />
-              <div className="flex-1 flex items-center justify-center p-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                <div className="w-10 h-10 border border-neutral-700/50 rounded flex items-center justify-center rotate-1 group-hover:rotate-0 transition-transform">
-                  <i className="fa-regular fa-image opacity-30 group-hover:opacity-60 text-lg" />
-                </div>
+              {selectedFrameIndices.includes(index) && (
+                <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: '0 0 20px rgba(59,130,246,0.3) inset' }} />
+              )}
+              <div className={`absolute top-0 left-0 right-0 h-1.5 transition-all z-20 ${selectedFrameIndices.includes(index) ? 'bg-blue-500 dark:bg-blue-400' : 'bg-transparent'}`} />
+
+              {/* Full-bleed Thumbnail */}
+              <div className="absolute inset-0 w-full h-full flex items-center justify-center p-1 opacity-80 group-hover:opacity-100 transition-opacity z-10">
+                {frame.thumbnail ? (
+                  <img src={frame.thumbnail} alt={`Frame ${index + 1}`} className="w-full h-full object-contain rounded-xl shadow-inner mix-blend-multiply dark:mix-blend-lighten" />
+                ) : (
+                  <i className="fa-regular fa-image opacity-30 text-3xl" />
+                )}
               </div>
-              <div className="bg-neutral-900/50 p-1.5 flex justify-center">
-                <span className={`text-[9px] font-black font-mono transition-colors ${selectedFrameIndices.includes(index) ? 'text-blue-400' : 'text-neutral-600'}`}>
+
+              {/* Floating Frame Index */}
+              <div className="absolute bottom-1 right-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm z-20">
+                <span className={`text-[11px] font-black font-mono transition-colors tracking-widest ${selectedFrameIndices.includes(index) ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   #{String(index + 1).padStart(2, '0')}
                 </span>
               </div>
@@ -994,9 +1099,10 @@ const App: React.FC = () => {
           ))}
           <button
             onClick={addFrame}
-            className="min-w-[90px] h-full rounded-xl border-2 border-neutral-800 border-dashed hover:border-neutral-600 hover:bg-neutral-800/30 flex items-center justify-center text-neutral-700 hover:text-neutral-500 transition-all font-black text-xl"
+            className="min-w-[110px] h-full rounded-2xl border-2 border-slate-300 dark:border-slate-700 border-dashed hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 flex flex-col gap-2 items-center justify-center text-slate-400 hover:text-blue-500 transition-all font-black text-3xl"
           >
             +
+            <span className="text-[10px] uppercase tracking-widest font-bold">New Frame</span>
           </button>
         </div>
       </footer>
