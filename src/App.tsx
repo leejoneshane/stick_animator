@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Layers, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Trash2, Download, Upload, Monitor, Undo2, Redo2, RotateCcw, Save, FolderOpen } from 'lucide-react';
+import { Layers, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Trash2, Download, Monitor, Undo2, Redo2, RotateCcw, Save, FolderOpen } from 'lucide-react';
 import type { Figure, Keyframe, Animation, FigureNode, StageDimensions } from './types';
 
 const STAGE_SIZES: Record<string, StageDimensions> = {
@@ -234,6 +234,86 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAddShape = (type: 'LINE' | 'CIRCLE') => {
+    const newFigId = uuidv4();
+    const rootId = uuidv4();
+    const endId = uuidv4();
+
+    const shapeName = type === 'LINE' ? '線條' : '圓形';
+    const shapeEnum = type === 'LINE' ? 'TRAPEZOID' : 'CIRCLE';
+
+    const newFig: Figure = {
+      id: newFigId,
+      name: newFigId,
+      origine: shapeName,
+      rootId: rootId,
+      nodes: {
+        [rootId]: {
+          id: rootId, name: 'Root',
+          relX: STAGE_SIZES[currentStageSize].width / 2,
+          relY: STAGE_SIZES[currentStageSize].height / 2,
+          thickness: type === 'LINE' ? 10 : 40,
+          handleType: 'STATIC', parentId: null, zOrder: 1,
+          isVisible: true, children: [endId]
+        },
+        [endId]: {
+          id: endId, name: 'End',
+          relX: 0, relY: type === 'LINE' ? 50 : 50,
+          thickness: type === 'LINE' ? 10 : 40,
+          handleType: 'STRETCH', parentId: rootId, zOrder: 1,
+          segment: { shape: shapeEnum, color: '#ffffff' },
+          isVisible: true, children: []
+        }
+      }
+    };
+
+    const newKeyframes = animation.keyframes.map((k, idx) => {
+      if (idx === currentFrameIndex) {
+        return { ...k, figureStates: { ...k.figureStates, [newFigId]: newFig } };
+      }
+      return k;
+    });
+    setAnimation({ ...animation, keyframes: newKeyframes });
+    setSelectedFigureId(newFigId);
+    setSelectedNodeId(endId);
+  };
+
+  const handleExtendNode = () => {
+    if (!currentFigure || !selectedNodeId) return;
+    const parentNode = currentFigure.nodes[selectedNodeId];
+    if (!parentNode) return;
+
+    const newNodeId = uuidv4();
+    const newFig = { ...currentFigure };
+
+    newFig.nodes = {
+      ...newFig.nodes,
+      [newNodeId]: {
+        id: newNodeId,
+        name: `Node_${Object.keys(newFig.nodes).length}`,
+        relX: 0,
+        relY: 20,
+        thickness: parentNode.thickness,
+        handleType: 'STRETCH',
+        parentId: selectedNodeId,
+        zOrder: parentNode.zOrder + 1,
+        segment: { shape: 'TRAPEZOID', color: '#ffffff' },
+        isVisible: true,
+        children: []
+      }
+    };
+
+    newFig.nodes[selectedNodeId] = {
+      ...parentNode,
+      children: [...(parentNode.children || []), newNodeId]
+    };
+
+    handleFigureChange(newFig);
+    setSelectedNodeId(newNodeId);
+  };
+
+  const isEndNodeSelected = selectedNodeId && currentFigure && !Object.values(currentFigure.nodes).some(n => n.parentId === selectedNodeId);
+
   const handleSaveProject = () => {
     const projectData = {
       version: '1.0.0',
@@ -394,11 +474,38 @@ const App: React.FC = () => {
         {/* Left Toolbar (Tools) */}
         <div className="w-16 border-r border-white/5 bg-[#0a0a0f] flex flex-col items-center py-4 z-20 shadow-2xl gap-4">
           <button
+            onClick={() => handleAddShape('LINE')}
+            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group flex items-center justify-center aspect-square flex-shrink-0"
+            title="新增線條"
+          >
+            <i className="fa-solid fa-minus text-xl"></i>
+          </button>
+
+          <button
+            onClick={() => handleAddShape('CIRCLE')}
+            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group flex items-center justify-center aspect-square flex-shrink-0"
+            title="新增圓形"
+          >
+            <i className="fa-regular fa-circle text-xl"></i>
+          </button>
+
+          <button
+            onClick={handleExtendNode}
+            disabled={!isEndNodeSelected}
+            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group flex items-center justify-center aspect-square flex-shrink-0 disabled:opacity-30 disabled:pointer-events-none"
+            title="新增節點 (從末端延伸)"
+          >
+            <i className="fa-solid fa-code-branch text-xl"></i>
+          </button>
+
+          <div className="w-8 h-px bg-neutral-800 my-2" />
+
+          <button
             onClick={() => setIsLibraryModalOpen(true)}
-            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group"
+            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group flex items-center justify-center aspect-square flex-shrink-0"
             title="新增物件"
           >
-            <i className="w-16 h-16 fa-solid fa-circle-plus"></i>
+            <i className="fa-solid fa-circle-plus text-xl"></i>
           </button>
 
           <button
@@ -415,17 +522,17 @@ const App: React.FC = () => {
               setAnimation({ ...animation, keyframes: newKeyframes });
               setSelectedFigureId(Object.keys(newFigureStates)[0] || 'none');
             }}
-            className="p-3 bg-neutral-800/50 hover:bg-red-500/20 rounded-xl text-neutral-400 hover:text-red-400 transition-all group disabled:opacity-30"
+            className="p-3 bg-neutral-800/50 hover:bg-red-500/20 rounded-xl text-neutral-400 hover:text-red-400 transition-all group flex items-center justify-center aspect-square flex-shrink-0 disabled:opacity-30"
             title="移除物件"
             disabled={!currentKeyframe.figureStates[selectedFigureId]}
           >
-            <i className="w-16 h-16 fa-solid fa-trash-can"></i>
+            <i className="fa-solid fa-trash-can text-xl"></i>
           </button>
 
           <div className="w-8 h-px bg-neutral-800 my-2" />
 
           <button
-            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group disabled:opacity-30"
+            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group flex items-center justify-center aspect-square flex-shrink-0 disabled:opacity-30"
             title="匯出物件"
             disabled={!currentFigure}
             onClick={() => {
@@ -463,14 +570,14 @@ const App: React.FC = () => {
               a.click();
             }}
           >
-            <i className="w-16 h-16 fa-solid fa-download"></i>
+            <i className="fa-solid fa-download text-xl"></i>
           </button>
 
           <button
-            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group relative"
+            className="p-3 bg-neutral-800/50 hover:bg-neutral-700/80 rounded-xl text-neutral-400 hover:text-white transition-all group relative flex items-center justify-center aspect-square flex-shrink-0"
             title="匯入物件"
           >
-            <i className="w-16 h-16 fa-solid fa-upload"></i>
+            <i className="fa-solid fa-upload text-xl"></i>
             <input
               type="file"
               accept=".figure,.json"
