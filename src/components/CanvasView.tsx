@@ -276,7 +276,7 @@ export const CanvasView = React.forwardRef<CanvasViewHandle, CanvasViewProps>(({
         handleMouseMove(mouseEvent);
     };
 
-    const handleTouchEnd = (e: React.TouchEvent) => {
+    const handleTouchEnd = () => {
         // We don't necessarily need to preventDefault on touchEnd for simple drags, 
         // but it can help prevent "ghost clicks" on some devices.
         const mouseEvent = {
