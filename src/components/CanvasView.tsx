@@ -245,6 +245,47 @@ export const CanvasView = React.forwardRef<CanvasViewHandle, CanvasViewProps>(({
             }
         }
     }, [figures, sortedFigures, showStaticHandles, width, height, stageWidth, stageHeight, selectedNodeId, selectedFigureId, onionSkins, bgImage]);
+    
+    const handleTouchStart = (e: React.TouchEvent) => {
+        // Prevent default browser behavior (scrolling/zooming)
+        if (e.cancelable) e.preventDefault();
+        const touch = e.touches[0];
+        const rect = canvasRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        
+        // Create a synthetic MouseEvent-like object for handleMouseDown
+        const mouseEvent = {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            shiftKey: false,
+        } as React.MouseEvent;
+        handleMouseDown(mouseEvent);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (e.cancelable) e.preventDefault();
+        const touch = e.touches[0];
+        const rect = canvasRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
+        const mouseEvent = {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            shiftKey: false,
+        } as React.MouseEvent;
+        handleMouseMove(mouseEvent);
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        // We don't necessarily need to preventDefault on touchEnd for simple drags, 
+        // but it can help prevent "ghost clicks" on some devices.
+        const mouseEvent = {
+            clientX: 0,
+            clientY: 0,
+            shiftKey: false,
+        } as React.MouseEvent;
+        handleMouseUp(mouseEvent);
+    };
 
     const handleMouseDown = (e: React.MouseEvent) => {
         const rect = canvasRef.current?.getBoundingClientRect();
@@ -548,7 +589,10 @@ export const CanvasView = React.forwardRef<CanvasViewHandle, CanvasViewProps>(({
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
-            className="bg-neutral-950 cursor-crosshair block"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            className="bg-neutral-950 cursor-crosshair block touch-none"
         />
     );
 });
