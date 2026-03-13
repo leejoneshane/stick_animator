@@ -130,9 +130,12 @@ const App: React.FC = () => {
   const handleBackgroundImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (backgroundImageUrl) URL.revokeObjectURL(backgroundImageUrl);
-      const url = URL.createObjectURL(file);
-      setBackgroundImageUrl(url);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        setBackgroundImageUrl(base64);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -158,6 +161,28 @@ const App: React.FC = () => {
     }
     return () => clearInterval(interval);
   }, [isPlaying, animation.fps, animation.keyframes.length]);
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isZ = e.key.toLowerCase() === 'z';
+      const isMod = e.metaKey || e.ctrlKey;
+      const isShift = e.shiftKey;
+
+      if (isZ && isMod) {
+        if (isShift) {
+          e.preventDefault();
+          redo();
+        } else {
+          e.preventDefault();
+          undo();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   const currentKeyframe = animation.keyframes[currentFrameIndex];
   const currentFigure = currentKeyframe.figureStates[selectedFigureId];
@@ -406,7 +431,8 @@ const App: React.FC = () => {
       animation,
       currentStageSize,
       onionSkinCount,
-      interpolationRatio
+      interpolationRatio,
+      backgroundImageUrl
     };
     const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -432,6 +458,7 @@ const App: React.FC = () => {
           setCurrentStageSize(parsed.currentStageSize);
           if (parsed.onionSkinCount !== undefined) setOnionSkinCount(parsed.onionSkinCount);
           if (parsed.interpolationRatio !== undefined) setInterpolationRatio(parsed.interpolationRatio);
+          if (parsed.backgroundImageUrl !== undefined) setBackgroundImageUrl(parsed.backgroundImageUrl);
 
           setCurrentFrameIndex(0);
           setSelectedFrameIndices([0]);
@@ -447,6 +474,29 @@ const App: React.FC = () => {
     e.target.value = ''; // Reset input
   };
 
+  const [draggedFrameIndex, setDraggedFrameIndex] = useState<number | null>(null);
+
+  const handleFrameDragStart = (index: number) => {
+    setDraggedFrameIndex(index);
+  };
+
+  const handleFrameDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleFrameDrop = (index: number) => {
+    if (draggedFrameIndex === null || draggedFrameIndex === index) return;
+
+    const newKeyframes = [...animation.keyframes];
+    const item = newKeyframes[draggedFrameIndex];
+    newKeyframes.splice(draggedFrameIndex, 1);
+    newKeyframes.splice(index, 0, item);
+
+    setAnimation({ ...animation, keyframes: newKeyframes });
+    setCurrentFrameIndex(index);
+    setDraggedFrameIndex(null);
+  };
+
   const [exporting, setExporting] = useState(false);
   const handleExportGif = async () => {
     setExporting(true);
@@ -458,6 +508,7 @@ const App: React.FC = () => {
         canvasSize.height,
         STAGE_SIZES[currentStageSize].width,
         STAGE_SIZES[currentStageSize].height,
+        backgroundImageUrl,
         (p: number) => console.log(`Exporting: ${Math.round(p * 100)} %`)
       );
       const url = URL.createObjectURL(blob);
@@ -1039,13 +1090,24 @@ const App: React.FC = () => {
               </button>
 
               <div className="flex flex-col items-center gap-1 mx-2">
-                <span className="text-[9px] font-bold opacity-70 uppercase tracking-wider">補幀比例: {interpolationRatio.toFixed(1)}</span>
-                <input
-                  type="range" min="0.1" max="0.9" step="0.1"
-                  value={interpolationRatio}
-                  onChange={(e) => setInterpolationRatio(Number(e.target.value))}
-                  className="w-20 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                />
+                <span className="text-[9px] font-bold opacity-70 uppercase tracking-wider">補幀距離比例</span>
+                <div className="flex gap-1">
+                  {[
+                    { label: '1/10', val: 0.1 },
+                    { label: '1/5', val: 0.2 },
+                    { label: '1/4', val: 0.25 },
+                    { label: '1/3', val: 0.33 },
+                    { label: '1/2', val: 0.5 }
+                  ].map(p => (
+                    <button
+                      key={p.label}
+                      onClick={() => setInterpolationRatio(p.val)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all ${Math.abs(interpolationRatio - p.val) < 0.01 ? 'bg-blue-600 border-blue-500 text-white shadow-sm' : 'bg-white/50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="w-px h-10 bg-slate-300 dark:bg-slate-700 mx-2" />
@@ -1082,7 +1144,12 @@ const App: React.FC = () => {
             <div
               key={frame.id}
               onClick={(e) => toggleFrameSelection(index, e.shiftKey || e.metaKey || e.ctrlKey)}
+              draggable
+              onDragStart={() => handleFrameDragStart(index)}
+              onDragOver={(e) => handleFrameDragOver(e)}
+              onDrop={() => handleFrameDrop(index)}
               className={`min-w-[110px] h-full rounded-2xl border-2 cursor-pointer transition-all flex flex-col relative group overflow-hidden bg-white/40 dark:bg-slate-800/50 backdrop-blur-sm
+                ${draggedFrameIndex === index ? 'opacity-50' : ''}
                 ${selectedFrameIndices.includes(index)
                   ? 'border-blue-500 dark:border-blue-400 bg-blue-50/80 dark:bg-blue-900/20'
                   : index === currentFrameIndex
@@ -1097,7 +1164,7 @@ const App: React.FC = () => {
               {/* Full-bleed Thumbnail */}
               <div className="absolute inset-0 w-full h-full flex items-center justify-center p-1 opacity-80 group-hover:opacity-100 transition-opacity z-10">
                 {frame.thumbnail ? (
-                  <img src={frame.thumbnail} alt={`Frame ${index + 1}`} className="w-full h-full object-contain rounded-xl shadow-inner mix-blend-multiply dark:mix-blend-lighten" />
+                  <img src={frame.thumbnail} alt={`Frame ${index + 1}`} className="w-full h-full object-contain rounded-xl shadow-inner mix-blend-multiply dark:mix-blend-lighten pointer-events-none" />
                 ) : (
                   <i className="fa-regular fa-image opacity-30 text-3xl" />
                 )}

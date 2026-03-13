@@ -8,9 +8,10 @@ export async function exportToGif(
     viewHeight: number,
     stageWidth: number,
     stageHeight: number,
+    backgroundImageUrl: string | null,
     onProgress: (progress: number) => void
 ): Promise<Blob> {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
         const gif = new GIF({
             workers: 2,
             quality: 10,
@@ -25,6 +26,16 @@ export async function exportToGif(
         const ctx = canvas.getContext('2d');
         if (!ctx) return reject('Could not get canvas context');
 
+        let bgImage: HTMLImageElement | null = null;
+        if (backgroundImageUrl) {
+            bgImage = await new Promise((res) => {
+                const img = new Image();
+                img.onload = () => res(img);
+                img.onerror = () => res(null);
+                img.src = backgroundImageUrl;
+            });
+        }
+
         const offsetX = -(viewWidth - stageWidth) / 2;
         const offsetY = -(viewHeight - stageHeight) / 2;
 
@@ -32,6 +43,25 @@ export async function exportToGif(
             ctx.clearRect(0, 0, stageWidth, stageHeight);
             ctx.fillStyle = '#22222a'; // Stage Background
             ctx.fillRect(0, 0, stageWidth, stageHeight);
+
+            if (bgImage) {
+                const imgRatio = bgImage.width / bgImage.height;
+                const stageRatio = stageWidth / stageHeight;
+                let drawWidth, drawHeight, drawX, drawY;
+
+                if (imgRatio > stageRatio) {
+                    drawHeight = stageHeight;
+                    drawWidth = bgImage.width * (stageHeight / bgImage.height);
+                    drawX = (stageWidth - drawWidth) / 2;
+                    drawY = 0;
+                } else {
+                    drawWidth = stageWidth;
+                    drawHeight = bgImage.height * (stageWidth / bgImage.width);
+                    drawX = 0;
+                    drawY = (stageHeight - drawHeight) / 2;
+                }
+                ctx.drawImage(bgImage, drawX, drawY, drawWidth, drawHeight);
+            }
 
             ctx.save();
             ctx.translate(offsetX, offsetY);
