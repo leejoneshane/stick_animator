@@ -67,7 +67,7 @@ export const CanvasView = React.forwardRef<CanvasViewHandle, CanvasViewProps>(({
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = stageWidth / 2; // Thumbnail resolution scaling
                 tempCanvas.height = stageHeight / 2;
-                const ctx = tempCanvas.getContext('2d');
+                const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
                 if (ctx) {
                     const offsetX = (canvas.width - stageWidth) / 2;
                     const offsetY = (canvas.height - stageHeight) / 2;
@@ -142,7 +142,7 @@ export const CanvasView = React.forwardRef<CanvasViewHandle, CanvasViewProps>(({
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) return;
 
         ctx.clearRect(0, 0, width, height);

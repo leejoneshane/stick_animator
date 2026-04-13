@@ -17,13 +17,15 @@ export async function exportToGif(
             quality: 10,
             width: stageWidth,
             height: stageHeight,
-            workerScript: '/gif.worker.js'
+            workerScript: 'gif.worker.js' // Change to relative path
         });
+
+        console.log('Starting GIF export...', { stageWidth, stageHeight, frameCount: animation.keyframes.length });
 
         const canvas = document.createElement('canvas');
         canvas.width = stageWidth;
         canvas.height = stageHeight;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) return reject('Could not get canvas context');
 
         let bgImage: HTMLImageElement | null = null;
@@ -75,8 +77,13 @@ export async function exportToGif(
             gif.addFrame(ctx, { copy: true, delay: 1000 / animation.fps });
         });
 
+        console.log('Finished adding all frames to GIF. Rendering started...');
+
         gif.on('progress', (p) => onProgress(p));
-        gif.on('finished', (blob) => resolve(blob));
+        gif.on('finished', (blob) => {
+            console.log('GIF Rendering finished. Blob size:', blob.size);
+            resolve(blob);
+        });
         gif.render();
     });
 }
