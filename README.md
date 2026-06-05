@@ -1,73 +1,103 @@
-# React + TypeScript + Vite
+# 🌟 火柴人動畫魔法盒 (Online Pivot Animator) 🌟
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+歡迎來到**火柴人動畫魔法盒**！這是一個專門為你設計的「免安裝、打開網頁就能玩」的線上火柴人動畫工具。  
+只要用滑鼠拉一拉手腳，你就能像神奇的動畫師一樣，做出自己專屬的格格動畫（火柴人打鬥、走路、跳舞都難不倒它喔！）
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🎈 魔法盒的四大超能力 (核心特色)
 
-## React Compiler
+*   **🕺 關節扭扭樂**：每個物件都像是有骨頭一樣！按住紅點可以整個人抱著走，拉動藍點就能擺出各種帥氣姿勢！
+*   **🧅 洋蔥皮魔法 (殘影)**：看不到上一張圖畫到哪裡嗎？打開洋蔥皮，畫面上就會出現上一格的淡淡影子，讓你接下去畫得超精準！
+*   **🪄 自動補幀魔法棒**：只要擺好「起點」和「終點」，點一下魔法棒，電腦就會自動幫你補上中間的動作，動作變超順暢！
+*   **🎒 豐富的大玩具箱**：
+    *   **角色道具庫**：可以召喚火柴人、帥氣寶劍、圓形盾牌！
+    *   **任意變形**：想讓手臂變長？身體變粗？換個顏色？點兩下就能自己調！
+    *   **自訂背景**：上傳你喜歡的圖片當作舞台背景，讓火柴人在你家客廳或太空裡大冒險！
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## 🎮 新手三分鐘上學指南 (操作指南)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+想要做出第一個火柴人走路動畫嗎？跟著以下步驟做做看：
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+第一步：擺好姿勢 ➔ 第二步：拍一張照 (加影格) ➔ 第三步：動一點點 ➔ 第四步：再拍一張 ➔ 播放！
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+1.  **第一步：認識控制點**
+    *   🔴 **大紅點**：是物件的「核心重心」，按住它可以把整個火柴人移到畫布上任何地方。
+    *   🔵 **小藍點**：是火柴人的「手關節、腳關節」，按住並繞圈圈，手腳就會跟著旋轉。
+2.  **第二步：擺第一個姿勢**
+    *   用滑鼠拉一拉火柴人，讓他擺出準備起跑的姿勢。
+3.  **第三步：按下「新增影格」**
+    *   點選畫面下方大大的 `+` 號或底部的「底片」圖示 🎬，把這個姿勢存下來。此時下方時間軸會多出一張小卡片！
+4.  **第四步：移動一點點，重複拍照**
+    *   把手或腳稍微往前移一點點。
+    *   再次按下 `+` 新增影格。
+    *   重複做個 5~10 次。
+5.  **第五步：按下播放！**
+    *   按下下方大大的 **播放鍵 ▶️**，你的火柴人就動起來囉！
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 🛠️ 魔法工具說明書 (詳細功能介紹)
+
+### 1. 畫布區 (大舞台)
+*   **滑鼠左鍵拖曳**：拖曳紅色點移動，拖曳藍色點旋轉或拉長。
+*   **物件旋轉模式 (勾選)**：在右邊打勾這個模式後，不管拉哪一個點，火柴人整個人都會跟著轉圈圈喔！
+
+### 2. 左側工具欄 (玩具箱)
+*   ➖ **新增線條 / ⚪ 新增圓形**：在畫面上自己畫一根骨頭或一顆球。
+*   🌿 **新增節點 (從末端延伸)**：選取手臂或腳腳的最末端，再點這個按鈕，就能像長樹枝一樣長出手指或爪子！
+*   ✂️ **移除末端節點**：覺得手太長或畫錯了？選取最外面的點，點剪刀就可以剪掉它。
+*   ➕ **新增物件**：打開圖庫，叫出新的「火柴人」、「寶劍」或「盾牌」。
+*   🗑️ **移除物件**：把選取的人物或道具變不見。
+*   🔍 **放大 / 縮小 10%**：把火柴人變巨人或變小精靈。
+*   📥 **匯入 / 📤 匯出物件**：可以把你自己捏好的獨特怪物存成 `.figure` 檔案，或是把別人的怪物叫進來一起玩！
+
+### 3. 右側屬性面板 (調色盤與設定)
+*   **層級控制 (前後順序)**：調整數字，數字越大，這隻手就會疊在最前面（不怕手穿過身體囉！）。
+*   **控制桿類型**：
+    *   **旋轉**：這個點只能繞圈圈轉動。
+    *   **伸展**：這個點可以把手臂拉長、縮短或變胖。
+    *   **靜止**：固定不動，讓藍色控制點隱形，畫面更乾淨。
+*   **線條粗度**：拉動拉桿，可以讓骨頭變粗或變細。
+*   **形狀與顏色**：可以把骨頭切換成「圓形」或「梯形」，並在彩色格子裡選一個你最愛的顏色！
+*   **洋蔥皮殘影**：可以選 1、2 或 3。數字越大，後面就會浮現越多個先前的殘影，像幽靈一樣！
+*   **播放速度 (FPS)**：滑桿往右拉，動畫就播得越快；往左拉，就會像慢動作喔！
+
+### 4. 下方時間軸 (電影底片區)
+*   **影格卡片**：顯示你拍的每一張照片。你可以用滑鼠**拖曳卡片**來調換卡片的先後順序！
+*   ⏮️ / ⏭️ **上一步 / 下一步**：一張一張檢查動作有沒有做對。
+*   ▶️ / ⏸️ **播放 / 暫停**：看看動畫跑起來的成果。
+*   🪄 **自動補幀 (魔法棒)**：在兩個影格中間，點一下魔法棒，電腦就會用數學魔法幫你補出中間的動作！
+*   💾 **儲存專案 / 📂 讀取專案**：還沒畫完？按「儲存專案」下載 `.project` 檔，下次打開網頁「讀取專案」就能接著畫！
+*   📥 **匯出 GIF**：動畫做好了？點這個按鈕，就能把你的動畫做成一張會動的 GIF 圖，傳給同學和爸爸媽媽看！
+
+---
+
+## 🚀 給老師與家長的引導與安裝指南 (For Teachers & Parents)
+
+本專案基於 **React + TypeScript + Vite + TailwindCSS** 打造，擁有極佳的網頁流暢度，非常適合作為國小資訊課、創客（Maker）教育的動畫啟蒙工具。
+
+### 🔧 本地開發與運行步驟
+如果您想在學校電腦教室或自家電腦本地運行本軟體，請按照以下步驟：
+
+1.  **安裝 Node.js**：請至官網下載並安裝 LTS 版本的 Node.js。
+2.  **下載本專案代碼**並在終端機 (Terminal) 中進入專案目錄。
+3.  **安裝依賴套件**：
+    ```bash
+    npm install
+    ```
+4.  **啟動本地開發伺服器**：
+    ```bash
+    npm run dev
+    ```
+    啟動後，在瀏覽器打開命令列顯示的網址（通常是 `http://localhost:5173`）即可開始使用！
+
+### 📄 專案核心文件參考路徑
+*   **主入口程式碼**：[src/App.tsx](file:///Users/shane/Documents/GitHub/pivot_animator/src/App.tsx)
+*   **畫布渲染邏輯**：[src/components/CanvasView.tsx](file:///Users/shane/Documents/GitHub/pivot_animator/src/components/CanvasView.tsx)
+*   **骨骼資料定義**：[src/types/index.ts](file:///Users/shane/Documents/GitHub/pivot_animator/src/types/index.ts)
+*   **設定清單**：[package.json](file:///Users/shane/Documents/GitHub/pivot_animator/package.json)
